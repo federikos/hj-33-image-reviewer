@@ -96,6 +96,7 @@ function init() {
     e.preventDefault();
     handleFileChange(e);
   });
+  initMovedMenu();
 }
 
 function publicNewImage(img) {
@@ -126,5 +127,50 @@ menuItemBurger.addEventListener('click', e => {
     menuItemBurger.style.display = 'inline-block';
   })
 );
+
+function initMovedMenu() {
+  let movedMenu;
+
+  document.addEventListener('mousedown', e => {
+    if(e.target.classList.contains('drag')) {
+      movedMenu = e.target.parentElement;
+    }
+  });
+
+  document.addEventListener('mouseup', e => {
+    movedMenu = null;
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (movedMenu) {
+      let leftGap = menuItemDrag.offsetWidth / 2;
+      let rigthGap = menu.clientWidth - leftGap;
+      let gapY = menuItemDrag.offsetHeight / 2;
+      let rightBound = document.documentElement.clientWidth;
+      let bottomBound = document.documentElement.clientHeight;
+      let x, y;
+      if(e.clientY <= gapY) {
+        y = 0;
+      } else if(e.clientY >= bottomBound - gapY) {
+        y = bottomBound - gapY * 2;
+      } else {
+        y = e.clientY - gapY;
+      }
+
+      if(e.clientX <= leftGap) {
+        x = 0;
+      } else if(e.clientX >= rightBound - rigthGap - leftGap / 2) {
+        x = rightBound - rigthGap - leftGap - leftGap / 2;
+      } else {
+        x = e.clientX - leftGap;
+      }
+
+      movedMenu.style.left = `${x}px`;
+      movedMenu.style.top = `${y}px`;
+    }
+  });
+}
+
+
 
 init();
