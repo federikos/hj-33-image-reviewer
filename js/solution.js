@@ -12,6 +12,10 @@ const currentImage = document.querySelector('.current-image');
 const commentsForm = document.querySelector('.comments__form');
 const imageLoader = document.querySelector('.image-loader');
 const error = document.querySelector('.error');
+const menuUrl = document.querySelector('.menu__url');
+const menuCopy = document.querySelector('.menu_copy');
+
+const imgIdFromUrl = new URLSearchParams(window.location.search).get('imgIdFromUrl'); //получаем из урла id для "поделиться"
 let fileInput;
 
 function centerElement(el) {
@@ -36,6 +40,7 @@ function hideErrors() {
   [...errors].forEach(error => error.style.display = 'none');
 }
 
+//обработка загрузки нового изображения
 function handleFileChange(e) {
   hideErrors();
 
@@ -57,19 +62,17 @@ function handleFileChange(e) {
   publicNewImage(img)
    .catch(error => console.error('Ошибка:', error))
    .then(res => {
-     currentImage.src = res.url;
-     sessionStorage.setItem('currentImgSrc', res.url);
-     menu.dataset.state = 'selected';
-     menuItemBurger.style.display = 'inline-block';
-     menuModeShare.dataset.state = 'selected';
-     app.dataset.state = 'default';
-     sessionStorage.setItem('state', 'default');
-     menu.style.display = 'block';
-     currentImage.style.display = 'block';
-     imageLoader.style.display = 'none';
-     menuItemNew.style.display = 'none';
+      applyImg(res);
+      window.location.href = createShareUrl(res.id);
    });
 }
+
+//формирование url для "поделиться"
+function createShareUrl(id) {
+  const currentUrl = window.location.href.split('?')[0];
+  return `${currentUrl}?imgIdFromUrl=${id}`;
+}
+
 
 function init() {
   menu.dataset.state = sessionStorage.getItem('state') || 'initial';
@@ -96,9 +99,19 @@ function init() {
     e.preventDefault();
     handleFileChange(e);
   });
+
+  if (imgIdFromUrl) {
+    getImageInfo(imgIdFromUrl)
+    .catch(error => console.error('Ошибка:', error))
+    .then(res => {
+       applyImg(res);
+    });
+  }
+
   initMovedMenu();
 }
 
+//публикация изображения на сервере, возвращает инфо
 function publicNewImage(img) {
   const formData = new FormData();
   formData.append('title', img.name);
@@ -109,6 +122,31 @@ function publicNewImage(img) {
     body: formData,
   })
   .then(res => res.json())
+}
+
+//получение информации об изображении с сервера
+function getImageInfo(id) {
+  return fetch(`https://neto-api.herokuapp.com/pic/${id}`, {
+    method: 'GET'
+  })
+  .catch(error => console.error('Ошибка:', error))
+  .then(res => res.json());
+}
+
+//добавление полученного с сервера изображения в UI
+function applyImg(res) {
+  currentImage.src = res.url;
+  sessionStorage.setItem('currentImgSrc', res.url);
+  menu.dataset.state = 'selected';
+  menuItemBurger.style.display = 'inline-block';
+  menuModeShare.dataset.state = 'selected';
+  app.dataset.state = 'default';
+  sessionStorage.setItem('state', 'default');
+  menu.style.display = 'block';
+  currentImage.style.display = 'block';
+  imageLoader.style.display = 'none';
+  menuItemNew.style.display = 'none';
+  menuUrl.value = createShareUrl(res.id);
 }
 
 menuItemNew.addEventListener('click', e => fileInput.click());
@@ -127,6 +165,8 @@ menuItemBurger.addEventListener('click', e => {
     menuItemBurger.style.display = 'inline-block';
   })
 );
+
+menuCopy.addEventListener('click', () => navigator.clipboard.writeText(menuUrl.value));
 
 function initMovedMenu() {
   let movedMenu;
@@ -170,7 +210,5 @@ function initMovedMenu() {
     }
   });
 }
-
-
 
 init();
