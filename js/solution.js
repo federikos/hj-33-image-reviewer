@@ -15,7 +15,6 @@ const error = document.querySelector('.error');
 const menuUrl = document.querySelector('.menu__url');
 const menuCopy = document.querySelector('.menu_copy');
 
-const imgIdFromUrl = new URLSearchParams(window.location.search).get('imgIdFromUrl'); //получаем из урла id для "поделиться"
 let fileInput;
 
 function centerElement(el) {
@@ -63,7 +62,8 @@ function handleFileChange(e) {
    .catch(error => console.error('Ошибка:', error))
    .then(res => {
       applyImg(res);
-      window.location.href = createShareUrl(res.id);
+      switchMenuMode(menuModeShare);
+      history.pushState({}, null, createShareUrl(res.id)); //дописываем id в параметр url без перезагрузки страницы для удобного шаринга
    });
 }
 
@@ -75,6 +75,7 @@ function createShareUrl(id) {
 
 
 function init() {
+  const imgIdFromUrl = new URLSearchParams(window.location.search).get('imgIdFromUrl'); //получаем из урла id для "поделиться"
   menu.dataset.state = sessionStorage.getItem('state') || 'initial';
   commentsForm.style.display = 'none';
   currentImage.style.display = 'none';
@@ -105,6 +106,7 @@ function init() {
     .catch(error => console.error('Ошибка:', error))
     .then(res => {
        applyImg(res);
+       switchMenuMode(menuModeComments);
     });
   }
 
@@ -137,33 +139,34 @@ function getImageInfo(id) {
 function applyImg(res) {
   currentImage.src = res.url;
   sessionStorage.setItem('currentImgSrc', res.url);
-  menu.dataset.state = 'selected';
-  menuItemBurger.style.display = 'inline-block';
-  menuModeShare.dataset.state = 'selected';
-  app.dataset.state = 'default';
-  sessionStorage.setItem('state', 'default');
-  menu.style.display = 'block';
+  menuUrl.value = createShareUrl(res.id);
   currentImage.style.display = 'block';
   imageLoader.style.display = 'none';
+  menu.style.display = 'block';
+
+  //switch state
+  app.dataset.state = 'default';
+  sessionStorage.setItem('state', 'default');
+}
+
+function switchMenuMode(modeNode) {
   menuItemNew.style.display = 'none';
-  menuUrl.value = createShareUrl(res.id);
+  menu.dataset.state = 'selected';
+  menuItemBurger.style.display = 'inline-block';
+  modeNode.dataset.state = 'selected';
 }
 
 menuItemNew.addEventListener('click', e => fileInput.click());
 
 menuItemBurger.addEventListener('click', e => {
   e.currentTarget.parentElement.dataset.state = 'default';
+  e.currentTarget.style.display = 'none';
   [menuModeComments, menuModeDraw, menuModeShare].forEach(li => li.dataset.state = '');
   menuItemNew.style.display = 'inline-block';
 });
 
 [menuModeComments, menuModeDraw, menuModeShare].forEach(li => 
-  li.addEventListener('click', e => {
-    menu.dataset.state = 'selected';
-    e.currentTarget.dataset.state = 'selected';
-    menuItemNew.style.display = 'none';
-    menuItemBurger.style.display = 'inline-block';
-  })
+  li.addEventListener('click', e => switchMenuMode(e.currentTarget))
 );
 
 menuCopy.addEventListener('click', () => navigator.clipboard.writeText(menuUrl.value));
