@@ -10,12 +10,14 @@ const menuModeDraw = document.querySelector('.mode.draw');
 const menuModeShare = document.querySelector('.mode.share');
 const currentImage = document.querySelector('.current-image');
 const commentsForm = document.querySelector('.comments__form');
+const commentsMarker = document.querySelector('.comments__marker');
 const imageLoader = document.querySelector('.image-loader');
 const error = document.querySelector('.error');
 const menuUrl = document.querySelector('.menu__url');
 const menuCopy = document.querySelector('.menu_copy');
 
 let fileInput;
+let imgId = null;
 
 function centerElement(el) {
   const bounds = document.documentElement.getBoundingClientRect();
@@ -135,11 +137,30 @@ function getImageInfo(id) {
   .then(res => res.json());
 }
 
+//отправка комментария на сервер
+function publicNewComment(id, message, left, top) {
+  // const formData = {message, left, top}
+  const formData = 'message=' + encodeURIComponent(message) +
+    '&left=' + encodeURIComponent(left) + 
+    '&top=' + encodeURIComponent(top);
+
+  return fetch(`https://neto-api.herokuapp.com/pic/${id}/comments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: formData
+  })
+  .catch(err => console.error('Ошибка:', err))
+  .then(res => res.json());
+}
+
 //добавление полученного с сервера изображения в UI
 function applyImg(res) {
+  imgId = res.id;
   currentImage.src = res.url;
   sessionStorage.setItem('currentImgSrc', res.url);
-  menuUrl.value = createShareUrl(res.id);
+  menuUrl.value = createShareUrl(imgId);
   currentImage.style.display = 'block';
   imageLoader.style.display = 'none';
   menu.style.display = 'block';
@@ -212,6 +233,95 @@ function initMovedMenu() {
       movedMenu.style.top = `${y}px`;
     }
   });
+}
+
+//Комментирование
+
+app.addEventListener('click', e => {
+  if (menuModeComments.dataset.state === 'selected') {
+    if (e.target === e.currentTarget || e.target.classList.contains('current-image')) {
+      const newComment = commentsForm.cloneNode(true);
+      [...newComment.querySelectorAll('.comment')].forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии-примеры
+      commentsForm.parentElement.insertBefore(newComment, commentsForm);
+      newComment.style.display = 'block';
+      const marker = newComment.firstElementChild;
+      const markerLeft = e.clientX - marker.offsetWidth / 2;
+      const markerTop = e.clientY;
+      newComment.style.left = `${markerLeft}px`;
+      newComment.style.top = `${markerTop}px`;
+      marker.nextSibling.setAttribute('checked', ''); //отобразить форму добавления комментария 
+      marker.nextSibling.setAttribute('disabled', ''); //отключить скрытие формы по клику на маркер
+      
+      newComment.addEventListener('click', e => {
+        if (e.target.classList.contains('comments__close')) {
+          newComment.parentElement.removeChild(newComment);
+        }
+      });
+
+      newComment.addEventListener('click', e => {
+        if (e.target.classList.contains('comments__submit')) {
+          e.preventDefault();
+          const message = e.target.previousElementSibling.previousElementSibling.value;
+          publicNewComment(imgId, message, markerLeft, markerTop)
+          .then(res => applyComments(res));
+        }
+      });
+
+
+    }
+  }
+})
+
+//добавление полученных с сервера комментариев в UI
+function applyComments(res) {
+  for(const commentKey in res.comments) {
+    const comment = res.comments[commentKey];
+    console.log(comment);
+    const newComment = commentsForm.cloneNode(true);
+    const commentsBody = newComment.querySelector('.comments__body');
+    const commentPiece = newComment.querySelector('.comment').cloneNode(true);
+    const loader = newComment.querySelector('.loader').cloneNode(true); //лоадер для отображения внутри
+    [...newComment.querySelectorAll('.comment')].forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии-примеры
+    commentPiece.lastElementChild.innerText = comment.message;
+    commentPiece.firstElementChild.innerText = new Date(comment.timestamp)
+        .toLocaleString("ru", {
+          year: "2-digit",
+          month: "numeric",
+          day: "numeric",
+          hour: "numeric",
+          minute: "numeric",
+          second: "numeric"
+        })
+        .split(',').join('');
+    commentsBody.insertBefore(commentPiece, commentsBody.firstElementChild);
+
+    commentsForm.parentElement.insertBefore(newComment, commentsForm);
+
+    newComment.style.display = 'block';
+    const marker = newComment.firstElementChild;
+    newComment.style.left = `${comment.left}px`;
+    newComment.style.top = `${comment.top}px`;
+    marker.nextSibling.setAttribute('checked', ''); //отобразить форму добавления комментария 
+
+    
+    newComment.addEventListener('click', e => {
+      if (e.target.classList.contains('comments__close')) {
+        marker.nextSibling.removeAttribute('checked');
+      }
+    });
+
+    newComment.addEventListener('click', e => {
+      if (e.target.classList.contains('comments__submit')) {
+        e.preventDefault();
+        const message = e.target.previousElementSibling.previousElementSibling.value;
+        publicNewComment(imgId, message, comment.left, comment.top)
+        .then(res => console.log(res));
+      }
+    });
+
+
+
+  };
 }
 
 init();
