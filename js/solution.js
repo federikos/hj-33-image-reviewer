@@ -288,12 +288,19 @@ function applyComments(res) {
 }
 
 //Скрыть-показать комментарии
-commentsOffBtn.addEventListener('click', e => {
-  [...app.querySelectorAll('.comments__form')].forEach(commentForm => commentForm.style.display = 'none');
-});
-
-commentsOnBtn.addEventListener('click', e => {
-  [...app.querySelectorAll('.comments__form')].forEach(commentForm => commentForm.style.display = 'block');
+[...document.querySelectorAll('.menu__toggle')].forEach(toggle => {
+  toggle.addEventListener('change', e => {
+    if (e.currentTarget.checked) {
+      if (e.currentTarget.id === 'comments-on') {
+        [...app.querySelectorAll('.comments__form')]
+        .forEach(commentForm => commentForm.style.display = 'block');
+      }
+      if (e.currentTarget.id === 'comments-off') {
+        [...app.querySelectorAll('.comments__form')]
+        .forEach(commentForm => commentForm.style.display = 'none');
+      }
+    }
+  });
 });
 
 //События для комментариев
@@ -319,6 +326,7 @@ app.addEventListener('click', e => {
     const currentComment = e.target.parentElement.parentElement;
     currentComment.querySelector('.comments__marker-checkbox').removeAttribute('disabled'); //включить скрытие формы по клику на маркер
     const message = e.target.previousElementSibling.previousElementSibling.value;
+    e.target.previousElementSibling.previousElementSibling.value = ''; //обнуляем инпут комментария
     const bounds  = currentComment.getBoundingClientRect();
     publicNewComment(imgId, message, bounds.left, bounds.top)
     .then(res => {
@@ -328,5 +336,9 @@ app.addEventListener('click', e => {
     });
   }
 });
+
+function updateCommentForm(res) {
+
+}
 
 init();
