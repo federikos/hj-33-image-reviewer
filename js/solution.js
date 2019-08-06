@@ -8,9 +8,10 @@ const menuItemDrag = document.querySelector('.menu__item.drag');
 const menuModeComments = document.querySelector('.mode.comments');
 const menuModeDraw = document.querySelector('.mode.draw');
 const menuModeShare = document.querySelector('.mode.share');
+const commentsOnBtn = document.querySelector('.menu__toggle-title_on');
+const commentsOffBtn = document.querySelector('.menu__toggle-title_off');
 const currentImage = document.querySelector('.current-image');
-const commentsForm = document.querySelector('.comments__form');
-const commentsMarker = document.querySelector('.comments__marker');
+const commentsForm = app.removeChild(app.querySelector('.comments__form'));
 const imageLoader = document.querySelector('.image-loader');
 const error = document.querySelector('.error');
 const menuUrl = document.querySelector('.menu__url');
@@ -108,6 +109,7 @@ function init() {
     .catch(error => console.error('Ошибка:', error))
     .then(res => {
        applyImg(res);
+       applyComments(res);
        switchMenuMode(menuModeComments);
     });
   }
@@ -235,39 +237,22 @@ function initMovedMenu() {
   });
 }
 
-//Комментирование
-
+//Добавление комментария
 app.addEventListener('click', e => {
   if (menuModeComments.dataset.state === 'selected') {
     if (e.target === e.currentTarget || e.target.classList.contains('current-image')) {
       const newComment = commentsForm.cloneNode(true);
       [...newComment.querySelectorAll('.comment')].forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии-примеры
-      commentsForm.parentElement.insertBefore(newComment, commentsForm);
+      app.appendChild(newComment);
+      console.log(newComment);
       newComment.style.display = 'block';
       const marker = newComment.firstElementChild;
       const markerLeft = e.clientX - marker.offsetWidth / 2;
       const markerTop = e.clientY;
       newComment.style.left = `${markerLeft}px`;
       newComment.style.top = `${markerTop}px`;
-      marker.nextSibling.setAttribute('checked', ''); //отобразить форму добавления комментария 
+      marker.nextSibling.checked = true; //отобразить форму добавления комментария 
       marker.nextSibling.setAttribute('disabled', ''); //отключить скрытие формы по клику на маркер
-      
-      newComment.addEventListener('click', e => {
-        if (e.target.classList.contains('comments__close')) {
-          newComment.parentElement.removeChild(newComment);
-        }
-      });
-
-      newComment.addEventListener('click', e => {
-        if (e.target.classList.contains('comments__submit')) {
-          e.preventDefault();
-          const message = e.target.previousElementSibling.previousElementSibling.value;
-          publicNewComment(imgId, message, markerLeft, markerTop)
-          .then(res => applyComments(res));
-        }
-      });
-
-
     }
   }
 })
@@ -276,7 +261,6 @@ app.addEventListener('click', e => {
 function applyComments(res) {
   for(const commentKey in res.comments) {
     const comment = res.comments[commentKey];
-    console.log(comment);
     const newComment = commentsForm.cloneNode(true);
     const commentsBody = newComment.querySelector('.comments__body');
     const commentPiece = newComment.querySelector('.comment').cloneNode(true);
@@ -295,33 +279,54 @@ function applyComments(res) {
         .split(',').join('');
     commentsBody.insertBefore(commentPiece, commentsBody.firstElementChild);
 
-    commentsForm.parentElement.insertBefore(newComment, commentsForm);
+    app.appendChild(newComment);
 
     newComment.style.display = 'block';
-    const marker = newComment.firstElementChild;
     newComment.style.left = `${comment.left}px`;
     newComment.style.top = `${comment.top}px`;
-    marker.nextSibling.setAttribute('checked', ''); //отобразить форму добавления комментария 
-
-    
-    newComment.addEventListener('click', e => {
-      if (e.target.classList.contains('comments__close')) {
-        marker.nextSibling.removeAttribute('checked');
-      }
-    });
-
-    newComment.addEventListener('click', e => {
-      if (e.target.classList.contains('comments__submit')) {
-        e.preventDefault();
-        const message = e.target.previousElementSibling.previousElementSibling.value;
-        publicNewComment(imgId, message, comment.left, comment.top)
-        .then(res => console.log(res));
-      }
-    });
-
-
-
   };
 }
+
+//Скрыть-показать комментарии
+commentsOffBtn.addEventListener('click', e => {
+  [...app.querySelectorAll('.comments__form')].forEach(commentForm => commentForm.style.display = 'none');
+});
+
+commentsOnBtn.addEventListener('click', e => {
+  [...app.querySelectorAll('.comments__form')].forEach(commentForm => commentForm.style.display = 'block');
+});
+
+//События для комментариев
+//close
+app.addEventListener('click', e => {
+  if (e.target.classList.contains('comments__close')) {
+    e.preventDefault();
+    const currentComment = e.target.parentElement.parentElement;
+
+    if (currentComment.querySelector('.comment')) { //если текущая форма для комментариев уже содержит хотя бы один комментарий
+      currentComment.querySelector('.comments__marker-checkbox').checked = false; //выключаем чекбокс
+    } else {
+    const currentComment = e.target.parentElement.parentElement;
+    app.removeChild(currentComment); //иначе полностью удаляем комментарий из разметки
+    }
+  }
+});
+
+//submit
+app.addEventListener('click', e => {
+  if (e.target.classList.contains('comments__submit')) {
+    e.preventDefault();
+    const currentComment = e.target.parentElement.parentElement;
+    currentComment.querySelector('.comments__marker-checkbox').removeAttribute('disabled'); //включить скрытие формы по клику на маркер
+    const message = e.target.previousElementSibling.previousElementSibling.value;
+    const bounds  = currentComment.getBoundingClientRect();
+    publicNewComment(imgId, message, bounds.left, bounds.top)
+    .then(res => {
+      console.log('comment sent'); 
+      // applyComments(res)
+      //здесь вызываем функцию "обновить форму комментария", в которой обновляем только комменты в этой точке
+    });
+  }
+});
 
 init();
