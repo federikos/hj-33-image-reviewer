@@ -65,6 +65,7 @@ function handleFileChange(e) {
    .catch(error => console.error('Ошибка:', error))
    .then(res => {
       applyImg(res);
+      applyComments(res);
       switchMenuMode(menuModeShare);
       history.pushState({}, null, createShareUrl(res.id)); //дописываем id в параметр url без перезагрузки страницы для удобного шаринга
    });
@@ -259,31 +260,55 @@ app.addEventListener('click', e => {
 
 //добавление полученных с сервера комментариев в UI
 function applyComments(res) {
+  
+  const sortedComments = [
+    // {top, left, comments: []},
+  ];
+
   for(const commentKey in res.comments) {
     const comment = res.comments[commentKey];
-    const newComment = commentsForm.cloneNode(true);
-    const commentsBody = newComment.querySelector('.comments__body');
-    const commentPiece = newComment.querySelector('.comment').cloneNode(true);
-    [...newComment.querySelectorAll('.comment')].forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии-примеры
-    commentPiece.lastElementChild.innerText = comment.message;
-    commentPiece.firstElementChild.innerText = new Date(comment.timestamp)
-        .toLocaleString("ru", {
-          year: "2-digit",
-          month: "numeric",
-          day: "numeric",
-          hour: "numeric",
-          minute: "numeric",
-          second: "numeric"
-        })
-        .split(',').join('');
-    commentsBody.insertBefore(commentPiece, commentsBody.firstElementChild);
+    let isPositionFound = false;
+    sortedComments.forEach(group => {
+      if (group.top === comment.top
+        && group.left === comment.left) {
+          group.comments.push(comment);
+          isPositionFound = true;
+        }
+    });
 
-    app.appendChild(newComment);
-
-    newComment.style.display = 'block';
-    newComment.style.left = `${comment.left}px`;
-    newComment.style.top = `${comment.top}px`;
+    if (!isPositionFound) {
+      sortedComments.push({top: comment.top, left: comment.left, comments: [comment]});
+    }
   };
+
+  for (const commentsGroup of sortedComments) {
+    const currentCommentsForm = commentsForm.cloneNode(true);
+    const currentCommentsBody = currentCommentsForm.querySelector('.comments__body');
+    // currentCommentsBody.removeChild(currentLoader);
+  
+    [...currentCommentsForm.querySelectorAll('.comment')]
+      .forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии
+    
+    for (const comment of commentsGroup.comments) { //этот код частично повторяется в функции updateCommentForm, нужно вынести в отдельную функцию
+      const currentCommentNode = commentNode.cloneNode(true);
+      currentCommentNode.lastElementChild.innerText = comment.message;
+      currentCommentNode.firstElementChild.innerText = new Date(comment.timestamp)
+          .toLocaleString("ru", {
+            year: "2-digit",
+            month: "numeric",
+            day: "numeric",
+            hour: "numeric",
+            minute: "numeric",
+            second: "numeric"
+          })
+          .split(',').join('');
+      currentCommentsBody.insertBefore(currentCommentNode, currentCommentsBody.lastElementChild.previousElementSibling.previousElementSibling);
+    }
+    app.appendChild(currentCommentsForm);
+    currentCommentsForm.style.display = 'block';
+    currentCommentsForm.style.left = `${commentsGroup.left}px`;
+    currentCommentsForm.style.top = `${commentsGroup.top}px`;
+  }
 }
 
 //Скрыть-показать комментарии
@@ -346,7 +371,6 @@ function updateCommentForm(res, currentCommentForm, currentLoader, left, top) {
   [...currentCommentForm.querySelectorAll('.comment')]
     .forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии
 
-    console.log(currentCommentForm);
   for(const commentKey in res.comments) {
     const comment = res.comments[commentKey];
     if (left === comment.left 
