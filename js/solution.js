@@ -8,10 +8,10 @@ const menuItemDrag = document.querySelector('.menu__item.drag');
 const menuModeComments = document.querySelector('.mode.comments');
 const menuModeDraw = document.querySelector('.mode.draw');
 const menuModeShare = document.querySelector('.mode.share');
-const commentsOnBtn = document.querySelector('.menu__toggle-title_on');
-const commentsOffBtn = document.querySelector('.menu__toggle-title_off');
 const currentImage = document.querySelector('.current-image');
 const commentsForm = app.removeChild(app.querySelector('.comments__form'));
+const commentsLoader = commentsForm.querySelector('.loader');
+const commentNode = commentsForm.querySelector('.comment');
 const imageLoader = document.querySelector('.image-loader');
 const error = document.querySelector('.error');
 const menuUrl = document.querySelector('.menu__url');
@@ -264,7 +264,6 @@ function applyComments(res) {
     const newComment = commentsForm.cloneNode(true);
     const commentsBody = newComment.querySelector('.comments__body');
     const commentPiece = newComment.querySelector('.comment').cloneNode(true);
-    const loader = newComment.querySelector('.loader').cloneNode(true); //лоадер для отображения внутри
     [...newComment.querySelectorAll('.comment')].forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии-примеры
     commentPiece.lastElementChild.innerText = comment.message;
     commentPiece.firstElementChild.innerText = new Date(comment.timestamp)
@@ -324,20 +323,49 @@ app.addEventListener('click', e => {
   if (e.target.classList.contains('comments__submit')) {
     e.preventDefault();
     const currentComment = e.target.parentElement.parentElement;
+    const textInput = e.target.previousElementSibling.previousElementSibling;
     currentComment.querySelector('.comments__marker-checkbox').removeAttribute('disabled'); //включить скрытие формы по клику на маркер
-    const message = e.target.previousElementSibling.previousElementSibling.value;
-    e.target.previousElementSibling.previousElementSibling.value = ''; //обнуляем инпут комментария
+    const message = textInput.value;
+    textInput.value = ''; //обнуляем инпут комментария
     const bounds  = currentComment.getBoundingClientRect();
+    const currentLoader = currentComment.querySelector('.comments__body').insertBefore(commentsLoader.cloneNode(true), textInput);
+
     publicNewComment(imgId, message, bounds.left, bounds.top)
     .then(res => {
       console.log('comment sent'); 
-      // applyComments(res)
+      updateCommentForm(res, currentComment, currentLoader, bounds.left, bounds.top);
       //здесь вызываем функцию "обновить форму комментария", в которой обновляем только комменты в этой точке
     });
   }
 });
 
-function updateCommentForm(res) {
+function updateCommentForm(res, currentCommentForm, currentLoader, left, top) {
+  const currentCommentsBody = currentCommentForm.querySelector('.comments__body');
+  currentCommentsBody.removeChild(currentLoader);
+
+  [...currentCommentForm.querySelectorAll('.comment')]
+    .forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии
+
+    console.log(currentCommentForm);
+  for(const commentKey in res.comments) {
+    const comment = res.comments[commentKey];
+    if (left === comment.left 
+        && top === comment.top) {
+      const currentCommentNode = commentNode.cloneNode(true);
+      currentCommentNode.lastElementChild.innerText = comment.message;
+      currentCommentNode.firstElementChild.innerText = new Date(comment.timestamp)
+          .toLocaleString("ru", {
+            year: "2-digit",
+            month: "numeric",
+            day: "numeric",
+            hour: "numeric",
+            minute: "numeric",
+            second: "numeric"
+          })
+          .split(',').join('');
+      currentCommentsBody.insertBefore(currentCommentNode, currentCommentsBody.lastElementChild.previousElementSibling.previousElementSibling);
+    }
+  };
 
 }
 
