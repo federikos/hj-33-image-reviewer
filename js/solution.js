@@ -10,7 +10,7 @@ const menuModeDraw = document.querySelector('.mode.draw');
 const menuModeShare = document.querySelector('.mode.share');
 const currentImage = document.querySelector('.current-image');
 const commentsForm = app.removeChild(app.querySelector('.comments__form'));
-const commentsLoader = commentsForm.querySelector('.loader');
+const commentsLoader = commentsForm.querySelector('.loader').parentElement;
 const commentNode = commentsForm.querySelector('.comment');
 const imageLoader = document.querySelector('.image-loader');
 const error = document.querySelector('.error');
@@ -252,6 +252,8 @@ app.addEventListener('click', e => {
       const markerTop = e.clientY;
       newComment.style.left = `${markerLeft}px`;
       newComment.style.top = `${markerTop}px`;
+
+      [...document.querySelectorAll('.comments__marker-checkbox')].forEach(input => input.checked = false); //скрыть все остальные комментарии
       marker.nextSibling.checked = true; //отобразить форму добавления комментария 
       marker.nextSibling.setAttribute('disabled', ''); //отключить скрытие формы по клику на маркер
     }
@@ -357,10 +359,19 @@ app.addEventListener('click', e => {
 
     publicNewComment(imgId, message, bounds.left, bounds.top)
     .then(res => {
-      console.log('comment sent'); 
       updateCommentForm(res, currentComment, currentLoader, bounds.left, bounds.top);
       //здесь вызываем функцию "обновить форму комментария", в которой обновляем только комменты в этой точке
     });
+  }
+});
+
+//скрываем остальные комментарии при показе комментария
+app.addEventListener('change', e => {
+  if(e.target.classList.contains('comments__marker-checkbox')) {
+    if (e.target.checked) {
+      [...document.querySelectorAll('.comments__marker-checkbox')].forEach(input => input.checked = false);
+      e.target.checked = true;
+    }
   }
 });
 
