@@ -16,6 +16,7 @@ const imageLoader = document.querySelector('.image-loader');
 const error = document.querySelector('.error');
 const menuUrl = document.querySelector('.menu__url');
 const menuCopy = document.querySelector('.menu_copy');
+const drawToolsList = document.querySelector('.draw-tools');
 
 let fileInput;
 let imgId = null;
@@ -35,6 +36,7 @@ function showErr(msg) {
   }
   error.parentElement.insertBefore(currentErr, error);
   currentErr.style.display = 'block';
+  currentErr.style.zIndex = 2;
 }
 
 function hideErrors() {
@@ -116,6 +118,118 @@ function init() {
   }
 
   initMovedMenu();
+
+
+  //canvas
+  createCanvasTag();
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  const BRUSH_RADIUS = 4;
+  let touches = [];
+  let drawing = false;
+  let needsRepaint = false;
+
+  function circle(point, color) {
+    ctx.beginPath();
+    ctx.fillStyle = color;
+    ctx.arc(...point, BRUSH_RADIUS / 2, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+
+  function smoothCurve(points, color) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = BRUSH_RADIUS;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+  
+    ctx.moveTo(...points[0]);
+  
+    for(let i = 1; i < points.length - 1; i++) {
+      ctx.lineTo(...points[i]);
+      // smoothCurveBetween(points[i], points[i + 1]);
+    }
+  
+    ctx.stroke();
+  }
+
+  function getColor() {
+    const colorName = drawToolsList.querySelector('input[type = radio]:checked').value;
+    let color;
+    switch (colorName) {
+      case 'red':
+        color = '#ea5d56';
+        break;
+      case 'yellow':
+        color = '#f3d135';
+        break;
+      case 'green':
+        color = '#6cbe47';
+        break;
+      case 'blue':
+        color = '#53a7f5';
+        break;
+      case 'purple':
+        color = '#b36ade';
+        break;
+    }
+    return color;
+  }
+
+  function repaint () {
+    // clear before repainting
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    touches
+      .forEach((touch) => {
+        touch.points.forEach(point => {
+          circle(point, touch.color);
+        });
+
+        smoothCurve(touch.points, touch.color);
+      });
+  }
+
+  canvas.addEventListener('mousedown', e => {
+    if (menuModeDraw.dataset.state === 'selected') {
+      drawing = true;
+      const touch = {color: getColor(), points: []};
+      touch.points.push([e.offsetX, e.offsetY]);
+      touches.push(touch);
+      needsRepaint = true;
+    }
+  });
+
+  canvas.addEventListener('mouseup', e => {
+    if (menuModeDraw.dataset.state === 'selected') {
+      drawing = false;
+      needsRepaint = true;
+      console.log(touches);
+    }
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    if (menuModeDraw.dataset.state === 'selected') {
+      if (drawing) {
+        const point = [e.offsetX, e.offsetY];
+        touches[touches.length - 1].points.push(point);
+        needsRepaint = true;
+      }
+    }
+  });
+
+  function tick () {
+    if(needsRepaint) {
+      repaint();
+      needsRepaint = false;
+    }
+    
+    window.requestAnimationFrame(tick);
+  }
+  
+  tick();
+
 }
 
 //публикация изображения на сервере, возвращает инфо
@@ -402,6 +516,19 @@ function updateCommentForm(res, currentCommentForm, currentLoader, left, top) {
     }
   };
 
+}
+
+//Canvas
+
+function createCanvasTag() {
+  const canvas = document.createElement('canvas');
+  canvas.setAttribute('width', app.clientWidth);
+  canvas.setAttribute('height', app.clientHeight);
+  canvas.id = 'canvas';
+  canvas.style.position = 'relative';
+  canvas.style.zIndex = 1;
+
+  app.insertBefore(canvas, currentImage);
 }
 
 init();
