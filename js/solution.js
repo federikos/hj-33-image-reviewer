@@ -354,24 +354,25 @@ function initMovedMenu() {
 
 //Добавление комментария
 app.addEventListener('click', e => {
-  if (menuModeComments.dataset.state === 'selected') {
-    if (e.target === e.currentTarget || e.target.classList.contains('current-image')) {
-      const newComment = commentsForm.cloneNode(true);
-      [...newComment.querySelectorAll('.comment')].forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии-примеры
-      app.appendChild(newComment);
-      console.log(newComment);
-      newComment.style.display = 'block';
-      const marker = newComment.firstElementChild;
-      const markerLeft = e.clientX - marker.offsetWidth / 2;
-      const markerTop = e.clientY;
-      newComment.style.left = `${markerLeft}px`;
-      newComment.style.top = `${markerTop}px`;
+  if (menuModeComments.dataset.state !== 'selected' || e.target.id !== 'canvas') {
+    return;
+  };
 
-      [...document.querySelectorAll('.comments__marker-checkbox')].forEach(input => input.checked = false); //скрыть все остальные комментарии
-      marker.nextSibling.checked = true; //отобразить форму добавления комментария 
-      marker.nextSibling.setAttribute('disabled', ''); //отключить скрытие формы по клику на маркер
-    }
-  }
+  const newComment = commentsForm.cloneNode(true);
+  newComment.style.zIndex = 2; //добавляем поверх канваса, чтобы нормально обрабатывались клики по комментариям
+  [...newComment.querySelectorAll('.comment')].forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии-примеры
+  app.appendChild(newComment);
+  console.log(newComment);
+  newComment.style.display = 'block';
+  const marker = newComment.firstElementChild;
+  const markerLeft = e.clientX - marker.offsetWidth / 2;
+  const markerTop = e.clientY;
+  newComment.style.left = `${markerLeft}px`;
+  newComment.style.top = `${markerTop}px`;
+
+  [...document.querySelectorAll('.comments__marker-checkbox')].forEach(input => input.checked = false); //скрыть все остальные комментарии
+  marker.nextSibling.checked = true; //отобразить форму добавления комментария 
+  marker.nextSibling.setAttribute('disabled', ''); //отключить скрытие формы по клику на маркер
 })
 
 //добавление полученных с сервера комментариев в UI
@@ -399,6 +400,7 @@ function applyComments(res) {
 
   for (const commentsGroup of sortedComments) {
     const currentCommentsForm = commentsForm.cloneNode(true);
+    currentCommentsForm.style.zIndex = 2; //форма для комментария поверх канваса, чтобы отслеживать клики
     const currentCommentsBody = currentCommentsForm.querySelector('.comments__body');
     // currentCommentsBody.removeChild(currentLoader);
   
