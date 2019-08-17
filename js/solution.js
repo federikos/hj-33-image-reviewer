@@ -1,5 +1,6 @@
 'use strict';
 
+//elements
 const app = document.querySelector('.app');
 const menu = document.querySelector('.menu');
 const menuItemNew = document.querySelector('.menu__item.new');
@@ -9,8 +10,8 @@ const menuModeComments = document.querySelector('.mode.comments');
 const menuModeDraw = document.querySelector('.mode.draw');
 const menuModeShare = document.querySelector('.mode.share');
 const currentImage = document.querySelector('.current-image');
-const commentsForm = app.removeChild(app.querySelector('.comments__form'));
-const commentsLoader = commentsForm.querySelector('.loader').parentElement;
+const commentsForm = app.removeChild(app.querySelector('.comments__form')); //запись в переменную с удалением из разметки
+const commentsLoader = commentsForm.querySelector('.loader').parentElement; //лоадер вместе с дивом-оберткой
 const commentNode = commentsForm.querySelector('.comment');
 const imageLoader = document.querySelector('.image-loader');
 const error = document.querySelector('.error');
@@ -18,8 +19,171 @@ const menuUrl = document.querySelector('.menu__url');
 const menuCopy = document.querySelector('.menu_copy');
 const drawToolsList = document.querySelector('.draw-tools');
 
-let fileInput;
+//state приложения
+let fileInput = null; //инпут для изображения
 let imgId = null;
+let mask = null;
+const imgIdFromUrl = new URLSearchParams(window.location.search).get('imgIdFromUrl'); //получаем из урла id для "поделиться"
+let state = sessionStorage.getItem('state') || 'initial';
+
+//внешний вид в зависимости от состояния
+menu.dataset.state = state;
+
+if (state === 'initial') {
+  currentImage.style.display = 'none';
+  menuItemBurger.style.display = 'none';
+  centerElement(menu); //центрируем меню
+} else {
+  currentImage.style.display = 'block';
+}
+
+currentImage.src = sessionStorage.getItem('currentImgSrc') || '';
+
+
+//загрузка изображения
+fileInput = fileInput || document.createElement('input');
+fileInput.setAttribute('type', 'file');
+fileInput.setAttribute('accept', 'image/jpeg, image/png');
+fileInput.addEventListener('change', handleFileChange);
+
+app.addEventListener('dragover', e => e.preventDefault());
+app.addEventListener('drop', e => {
+  e.preventDefault();
+  handleFileChange(e);
+});
+
+//маска
+addMask();
+mask = document.querySelector('.mask');
+
+//добавление данных изображения из id адресной строки
+if (imgIdFromUrl) {
+  getImageInfo(imgIdFromUrl)
+  .catch(error => console.error('Ошибка:', error))
+  .then(res => {
+     applyImg(res);
+     mask.src = res.mask || '';
+     applyComments(res);
+     switchMenuMode(menuModeComments);
+  });
+}
+
+initMovedMenu();
+
+//canvas
+addCanvas();
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const BRUSH_RADIUS = 4;
+let touches = [];
+let drawing = false;
+let needsRepaint = false;
+
+function circle(point, color) {
+  ctx.beginPath();
+  ctx.fillStyle = color;
+  ctx.arc(...point, BRUSH_RADIUS / 2, 0, 2 * Math.PI);
+  ctx.fill();
+}
+
+function smoothCurve(points, color) {
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = BRUSH_RADIUS;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  ctx.moveTo(...points[0]);
+
+  for(let i = 1; i < points.length - 1; i++) {
+    ctx.lineTo(...points[i]);
+    // smoothCurveBetween(points[i], points[i + 1]);
+  }
+
+  ctx.stroke();
+}
+
+function getColor() {
+  const colorName = drawToolsList.querySelector('input[type = radio]:checked').value;
+  let color;
+  switch (colorName) {
+    case 'red':
+      color = '#ea5d56';
+      break;
+    case 'yellow':
+      color = '#f3d135';
+      break;
+    case 'green':
+      color = '#6cbe47';
+      break;
+    case 'blue':
+      color = '#53a7f5';
+      break;
+    case 'purple':
+      color = '#b36ade';
+      break;
+  }
+  return color;
+}
+
+function repaint () {
+  // clear before repainting
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  touches
+    .forEach((touch) => {
+      touch.points.forEach(point => {
+        circle(point, touch.color);
+      });
+
+      smoothCurve(touch.points, touch.color);
+    });
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (menuModeDraw.dataset.state === 'selected') {
+    drawing = true;
+    const touch = {color: getColor(), points: []};
+    touch.points.push([e.offsetX, e.offsetY]);
+    touches.push(touch);
+    needsRepaint = true;
+  }
+});
+
+canvas.addEventListener('mouseup', e => {
+  if (menuModeDraw.dataset.state === 'selected') {
+    drawing = false;
+    needsRepaint = true;
+    console.log(touches);
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (menuModeDraw.dataset.state === 'selected') {
+    if (drawing) {
+      const point = [e.offsetX, e.offsetY];
+      touches[touches.length - 1].points.push(point);
+      needsRepaint = true;
+    }
+  }
+});
+
+function tick () {
+  if(needsRepaint) {
+    repaint();
+    needsRepaint = false;
+  }
+  
+  window.requestAnimationFrame(tick);
+}
+
+tick();
+
+
+
+
+//функции
 
 function centerElement(el) {
   const bounds = document.documentElement.getBoundingClientRect();
@@ -77,159 +241,6 @@ function handleFileChange(e) {
 function createShareUrl(id) {
   const currentUrl = window.location.href.split('?')[0];
   return `${currentUrl}?imgIdFromUrl=${id}`;
-}
-
-
-function init() {
-  const imgIdFromUrl = new URLSearchParams(window.location.search).get('imgIdFromUrl'); //получаем из урла id для "поделиться"
-  menu.dataset.state = sessionStorage.getItem('state') || 'initial';
-  commentsForm.style.display = 'none';
-  currentImage.style.display = 'none';
-  menuItemBurger.style.display = 'none';
-  centerElement(menu);
-
-  if(sessionStorage.getItem('state')) {
-    currentImage.style.display = 'block';
-  }
-
-  if(sessionStorage.getItem('currentImgSrc')) {
-    currentImage.src = sessionStorage.getItem('currentImgSrc');
-  }
-  
-  fileInput = fileInput || document.createElement('input');
-  fileInput.setAttribute('type', 'file');
-  fileInput.setAttribute('accept', 'image/jpeg, image/png');
-  fileInput.addEventListener('change', handleFileChange);
-
-  app.addEventListener('dragover', e => e.preventDefault());
-  app.addEventListener('drop', e => {
-    e.preventDefault();
-    handleFileChange(e);
-  });
-
-  if (imgIdFromUrl) {
-    getImageInfo(imgIdFromUrl)
-    .catch(error => console.error('Ошибка:', error))
-    .then(res => {
-       applyImg(res);
-       applyComments(res);
-       switchMenuMode(menuModeComments);
-    });
-  }
-
-  initMovedMenu();
-
-
-  //canvas
-  createCanvasTag();
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-
-  const BRUSH_RADIUS = 4;
-  let touches = [];
-  let drawing = false;
-  let needsRepaint = false;
-
-  function circle(point, color) {
-    ctx.beginPath();
-    ctx.fillStyle = color;
-    ctx.arc(...point, BRUSH_RADIUS / 2, 0, 2 * Math.PI);
-    ctx.fill();
-  }
-
-  function smoothCurve(points, color) {
-    ctx.beginPath();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = BRUSH_RADIUS;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-  
-    ctx.moveTo(...points[0]);
-  
-    for(let i = 1; i < points.length - 1; i++) {
-      ctx.lineTo(...points[i]);
-      // smoothCurveBetween(points[i], points[i + 1]);
-    }
-  
-    ctx.stroke();
-  }
-
-  function getColor() {
-    const colorName = drawToolsList.querySelector('input[type = radio]:checked').value;
-    let color;
-    switch (colorName) {
-      case 'red':
-        color = '#ea5d56';
-        break;
-      case 'yellow':
-        color = '#f3d135';
-        break;
-      case 'green':
-        color = '#6cbe47';
-        break;
-      case 'blue':
-        color = '#53a7f5';
-        break;
-      case 'purple':
-        color = '#b36ade';
-        break;
-    }
-    return color;
-  }
-
-  function repaint () {
-    // clear before repainting
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    touches
-      .forEach((touch) => {
-        touch.points.forEach(point => {
-          circle(point, touch.color);
-        });
-
-        smoothCurve(touch.points, touch.color);
-      });
-  }
-
-  canvas.addEventListener('mousedown', e => {
-    if (menuModeDraw.dataset.state === 'selected') {
-      drawing = true;
-      const touch = {color: getColor(), points: []};
-      touch.points.push([e.offsetX, e.offsetY]);
-      touches.push(touch);
-      needsRepaint = true;
-    }
-  });
-
-  canvas.addEventListener('mouseup', e => {
-    if (menuModeDraw.dataset.state === 'selected') {
-      drawing = false;
-      needsRepaint = true;
-      console.log(touches);
-    }
-  });
-
-  canvas.addEventListener('mousemove', e => {
-    if (menuModeDraw.dataset.state === 'selected') {
-      if (drawing) {
-        const point = [e.offsetX, e.offsetY];
-        touches[touches.length - 1].points.push(point);
-        needsRepaint = true;
-      }
-    }
-  });
-
-  function tick () {
-    if(needsRepaint) {
-      repaint();
-      needsRepaint = false;
-    }
-    
-    window.requestAnimationFrame(tick);
-  }
-  
-  tick();
-
 }
 
 //публикация изображения на сервере, возвращает инфо
@@ -354,12 +365,23 @@ function initMovedMenu() {
 
 //Добавление комментария
 app.addEventListener('click', e => {
+
   if (menuModeComments.dataset.state !== 'selected' || e.target.id !== 'canvas') {
     return;
   };
 
+  //скрыть все остальные комментарии
+  [...document.querySelectorAll('.comments__form')].forEach(commentForm => {
+    if (commentForm.querySelector('.comment')) {
+      commentForm.querySelector('.comments__marker-checkbox').checked = false;
+    } else {
+      //или удалить форму, если ни одного комментария нет
+      commentForm.remove();
+    }
+  });
+
   const newComment = commentsForm.cloneNode(true);
-  newComment.style.zIndex = 2; //добавляем поверх канваса, чтобы нормально обрабатывались клики по комментариям
+  newComment.style.zIndex = 3; //добавляем поверх канваса, чтобы нормально обрабатывались клики по комментариям
   [...newComment.querySelectorAll('.comment')].forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии-примеры
   app.appendChild(newComment);
   console.log(newComment);
@@ -370,7 +392,6 @@ app.addEventListener('click', e => {
   newComment.style.left = `${markerLeft}px`;
   newComment.style.top = `${markerTop}px`;
 
-  [...document.querySelectorAll('.comments__marker-checkbox')].forEach(input => input.checked = false); //скрыть все остальные комментарии
   marker.nextSibling.checked = true; //отобразить форму добавления комментария 
   marker.nextSibling.setAttribute('disabled', ''); //отключить скрытие формы по клику на маркер
 })
@@ -400,7 +421,7 @@ function applyComments(res) {
 
   for (const commentsGroup of sortedComments) {
     const currentCommentsForm = commentsForm.cloneNode(true);
-    currentCommentsForm.style.zIndex = 2; //форма для комментария поверх канваса, чтобы отслеживать клики
+    currentCommentsForm.style.zIndex = 3; //форма для комментария поверх канваса, чтобы отслеживать клики
     const currentCommentsBody = currentCommentsForm.querySelector('.comments__body');
     // currentCommentsBody.removeChild(currentLoader);
   
@@ -522,15 +543,29 @@ function updateCommentForm(res, currentCommentForm, currentLoader, left, top) {
 
 //Canvas
 
-function createCanvasTag() {
+function addCanvas() {
   const canvas = document.createElement('canvas');
   canvas.setAttribute('width', app.clientWidth);
   canvas.setAttribute('height', app.clientHeight);
   canvas.id = 'canvas';
   canvas.style.position = 'relative';
-  canvas.style.zIndex = 1;
+  canvas.style.zIndex = 2;
 
   app.insertBefore(canvas, currentImage);
 }
 
-init();
+function addMask() {
+  const mask = document.createElement('img');
+  mask.classList.add('mask');
+  mask.style.display = 'block';
+
+  //центрируем маску
+  mask.style.top = '50%';
+  mask.style.left = '50%';
+  mask.style.transform = 'translate(-50%, -50%)';
+
+  mask.style.position = 'absolute';
+  mask.style.zIndex = 1;
+
+  app.insertBefore(mask, currentImage);
+}
