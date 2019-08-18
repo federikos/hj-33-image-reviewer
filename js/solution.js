@@ -26,6 +26,7 @@ let mask = null;
 const imgIdFromUrl = new URLSearchParams(window.location.search).get('imgIdFromUrl'); //получаем из урла id для "поделиться"
 let state = sessionStorage.getItem('state') || 'initial';
 let ws = null;
+let timer = performance.now();
 
 //внешний вид в зависимости от состояния
 menu.dataset.state = state;
@@ -60,15 +61,15 @@ mask = document.querySelector('.mask');
 //добавление данных изображения из id адресной строки
 if (imgIdFromUrl) {
   getImageInfo(imgIdFromUrl)
-  .catch(error => showErr(error))
-  .then(res => {
-    console.log(res);
-     applyImg(res);
-     mask.src = res.mask || '';
-     applyComments(res.comments);
-     switchMenuMode(menuModeComments);
-     openWS(res.id);
-  });
+    .catch(error => showErr(error))
+    .then(res => {
+      console.log(res);
+      applyImg(res);
+      mask.src = res.mask || '';
+      applyComments(res.comments);
+      switchMenuMode(menuModeComments);
+      openWS(res.id);
+    });
 }
 
 initMovedMenu();
@@ -99,7 +100,7 @@ function smoothCurve(points, color) {
 
   ctx.moveTo(...points[0]);
 
-  for(let i = 1; i < points.length - 1; i++) {
+  for (let i = 1; i < points.length - 1; i++) {
     ctx.lineTo(...points[i]);
     // smoothCurveBetween(points[i], points[i + 1]); //можно сделать линию более плавной с помощью доп. функции вместо lineTo
   }
@@ -130,9 +131,7 @@ function getColor() {
   return color;
 }
 
-function repaint () {
-  // clear before repainting
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function repaint() {
 
   touches
     .forEach((touch) => {
@@ -147,7 +146,10 @@ function repaint () {
 canvas.addEventListener('mousedown', e => {
   if (menuModeDraw.dataset.state === 'selected') {
     drawing = true;
-    const touch = {color: getColor(), points: []};
+    const touch = {
+      color: getColor(),
+      points: []
+    };
     touch.points.push([e.offsetX, e.offsetY]);
     touches.push(touch);
     needsRepaint = true;
@@ -159,6 +161,15 @@ canvas.addEventListener('mouseup', e => {
     drawing = false;
     needsRepaint = true;
     console.log(touches);
+
+    //отправка на сервер
+    const now = performance.now();
+    //если прошло более 1 секунды с момента отправки штрихов на сервер, отправляем
+    if (now - timer > 1000) {
+      //отправка маски на сервер
+      canvas.toBlob(blob => ws.send(blob));
+      timer = now; //перезаписываем таймер
+    }
   }
 });
 
@@ -172,12 +183,12 @@ canvas.addEventListener('mousemove', e => {
   }
 });
 
-function tick () {
-  if(needsRepaint) {
+function tick() {
+  if (needsRepaint) {
     repaint();
     needsRepaint = false;
   }
-  
+
   window.requestAnimationFrame(tick);
 }
 
@@ -197,7 +208,7 @@ function centerElement(el) {
 function showErr(msg) {
   const currentErr = error.cloneNode(true);
 
-  if(msg) {
+  if (msg) {
     const currentMsg = currentErr.querySelector('.error__message');
     currentMsg.innerText = msg;
   }
@@ -221,24 +232,24 @@ function handleFileChange(e) {
   }
 
   const img = e.dataTransfer ? e.dataTransfer.files[0] : e.currentTarget.files[0];
-  
-  if(!(img.type === "image/jpeg" || img.type === "image/png")) {
+
+  if (!(img.type === "image/jpeg" || img.type === "image/png")) {
     showErr();
     return;
   }
 
   imageLoader.style.display = 'block';
   menu.style.display = 'none';
-  
+
   publicNewImage(img)
-   .catch(error => console.error('Ошибка:', error))
-   .then(res => {
+    .catch(error => console.error('Ошибка:', error))
+    .then(res => {
       applyImg(res);
       applyComments(res.comments);
       switchMenuMode(menuModeShare);
       history.pushState({}, null, createShareUrl(res.id)); //дописываем id в параметр url без перезагрузки страницы для удобного шаринга
       openWS(res.id);
-   });
+    });
 }
 
 //формирование url для "поделиться"
@@ -254,26 +265,26 @@ function publicNewImage(img) {
   formData.append('image', img);
 
   return fetch('https://neto-api.herokuapp.com/pic', {
-    method: 'POST',
-    body: formData,
-  })
-  .then(res => res.json())
+      method: 'POST',
+      body: formData,
+    })
+    .then(res => res.json())
 }
 
 //получение информации об изображении с сервера
 function getImageInfo(id) {
   return fetch(`https://neto-api.herokuapp.com/pic/${id}`, {
-    method: 'GET'
-  })
-  .catch(error => console.error('Ошибка:', error))
-  .then(res => res.json());
+      method: 'GET'
+    })
+    .catch(error => console.error('Ошибка:', error))
+    .then(res => res.json());
 }
 
 //отправка комментария на сервер
 function publicNewComment(id, message, left, top) {
   // const formData = {message, left, top}
   const formData = 'message=' + encodeURIComponent(message) +
-    '&left=' + encodeURIComponent(left) + 
+    '&left=' + encodeURIComponent(left) +
     '&top=' + encodeURIComponent(top);
 
   //отправить через websocket
@@ -286,17 +297,17 @@ function publicNewComment(id, message, left, top) {
       "top": top
     }
   }));
-  
+
   //отправить через fetch
   return fetch(`https://neto-api.herokuapp.com/pic/${id}/comments`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: formData
-  })
-  .catch(err => console.error('Ошибка:', err))
-  .then(res => res.json());
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData
+    })
+    .catch(err => console.error('Ошибка:', err))
+    .then(res => res.json());
 }
 
 //добавление полученного с сервера изображения в UI
@@ -330,7 +341,7 @@ menuItemBurger.addEventListener('click', e => {
   menuItemNew.style.display = 'inline-block';
 });
 
-[menuModeComments, menuModeDraw, menuModeShare].forEach(li => 
+[menuModeComments, menuModeDraw, menuModeShare].forEach(li =>
   li.addEventListener('click', e => switchMenuMode(e.currentTarget))
 );
 
@@ -340,7 +351,7 @@ function initMovedMenu() {
   let movedMenu;
 
   document.addEventListener('mousedown', e => {
-    if(e.target.classList.contains('drag')) {
+    if (e.target.classList.contains('drag')) {
       movedMenu = e.target.parentElement;
     }
   });
@@ -357,17 +368,17 @@ function initMovedMenu() {
       let rightBound = document.documentElement.clientWidth;
       let bottomBound = document.documentElement.clientHeight;
       let x, y;
-      if(e.clientY <= gapY) {
+      if (e.clientY <= gapY) {
         y = 0;
-      } else if(e.clientY >= bottomBound - gapY) {
+      } else if (e.clientY >= bottomBound - gapY) {
         y = bottomBound - gapY * 2;
       } else {
         y = e.clientY - gapY;
       }
 
-      if(e.clientX <= leftGap) {
+      if (e.clientX <= leftGap) {
         x = 0;
-      } else if(e.clientX >= rightBound - rigthGap - leftGap / 2) {
+      } else if (e.clientX >= rightBound - rigthGap - leftGap / 2) {
         x = rightBound - rigthGap - leftGap - leftGap / 2;
       } else {
         x = e.clientX - leftGap;
@@ -414,8 +425,8 @@ app.addEventListener('click', e => {
 
 //добавление комментариев в UI
 function applyComments(comments) {
-  
-  for(const commentKey in comments) {
+
+  for (const commentKey in comments) {
     //пропустить, если такой комментарий существует
     if (document.querySelector(`[data-id = '${commentKey}']`)) {
       continue;
@@ -428,33 +439,33 @@ function applyComments(comments) {
     currentCommentNode.lastElementChild.innerText = comment.message;
     currentCommentNode.dataset.id = commentKey;
     currentCommentNode.firstElementChild.innerText = new Date(comment.timestamp)
-        .toLocaleString("ru", {
-          year: "2-digit",
-          month: "numeric",
-          day: "numeric",
-          hour: "numeric",
-          minute: "numeric",
-          second: "numeric"
-        })
-        .split(',').join('');
-    
+      .toLocaleString("ru", {
+        year: "2-digit",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric"
+      })
+      .split(',').join('');
+
     //Форма с комментариями
     let currentCommentsForm = null;
 
     [...document.querySelectorAll('.comments__form')].forEach(group => {
-      if (parseInt(group.style.top) === comment.top
-        && parseInt(group.style.left) === comment.left) {
-          currentCommentsForm = group;
-        }
+      if (parseInt(group.style.top) === comment.top &&
+        parseInt(group.style.left) === comment.left) {
+        currentCommentsForm = group;
+      }
     });
 
     //создаем форму, если точки для этого комментария еще нет
     if (!currentCommentsForm) {
       currentCommentsForm = commentsForm.cloneNode(true);
       currentCommentsForm.style.zIndex = 4; //форма для комментария поверх канваса, чтобы отслеживать клики
-    
+
       [...currentCommentsForm.querySelectorAll('.comment')]
-        .forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии
+      .forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии
 
 
       app.appendChild(currentCommentsForm);
@@ -495,8 +506,8 @@ app.addEventListener('click', e => {
     if (currentComment.querySelector('.comment')) { //если текущая форма для комментариев уже содержит хотя бы один комментарий
       currentComment.querySelector('.comments__marker-checkbox').checked = false; //выключаем чекбокс
     } else {
-    const currentComment = e.target.parentElement.parentElement;
-    app.removeChild(currentComment); //иначе полностью удаляем комментарий из разметки
+      const currentComment = e.target.parentElement.parentElement;
+      app.removeChild(currentComment); //иначе полностью удаляем комментарий из разметки
     }
   }
 });
@@ -510,20 +521,20 @@ app.addEventListener('click', e => {
     currentComment.querySelector('.comments__marker-checkbox').removeAttribute('disabled'); //включить скрытие формы по клику на маркер
     const message = textInput.value;
     textInput.value = ''; //обнуляем инпут комментария
-    const bounds  = currentComment.getBoundingClientRect();
+    const bounds = currentComment.getBoundingClientRect();
     const currentLoader = currentComment.querySelector('.comments__body').insertBefore(commentsLoader.cloneNode(true), textInput);
 
     publicNewComment(imgId, message, bounds.left, bounds.top)
-    .then(res => {
-      updateCommentForm(res, currentComment, currentLoader, bounds.left, bounds.top);
-      //здесь вызываем функцию "обновить форму комментария", в которой обновляем только комменты в этой точке
-    });
+      .then(res => {
+        updateCommentForm(res, currentComment, currentLoader, bounds.left, bounds.top);
+        //здесь вызываем функцию "обновить форму комментария", в которой обновляем только комменты в этой точке
+      });
   }
 });
 
 //скрываем остальные комментарии при показе комментария
 app.addEventListener('change', e => {
-  if(e.target.classList.contains('comments__marker-checkbox')) {
+  if (e.target.classList.contains('comments__marker-checkbox')) {
     if (e.target.checked) {
       [...document.querySelectorAll('.comments__marker-checkbox')].forEach(input => {
         if (input.parentElement.querySelector('.comment')) {
@@ -546,24 +557,24 @@ function updateCommentForm(res, currentCommentForm, currentLoader, left, top) {
   currentCommentsBody.removeChild(currentLoader);
 
   [...currentCommentForm.querySelectorAll('.comment')]
-    .forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии
+  .forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии
 
-  for(const commentKey in res.comments) {
+  for (const commentKey in res.comments) {
     const comment = res.comments[commentKey];
-    if (left === comment.left 
-        && top === comment.top) {
+    if (left === comment.left &&
+      top === comment.top) {
       const currentCommentNode = commentNode.cloneNode(true);
       currentCommentNode.lastElementChild.innerText = comment.message;
       currentCommentNode.firstElementChild.innerText = new Date(comment.timestamp)
-          .toLocaleString("ru", {
-            year: "2-digit",
-            month: "numeric",
-            day: "numeric",
-            hour: "numeric",
-            minute: "numeric",
-            second: "numeric"
-          })
-          .split(',').join('');
+        .toLocaleString("ru", {
+          year: "2-digit",
+          month: "numeric",
+          day: "numeric",
+          hour: "numeric",
+          minute: "numeric",
+          second: "numeric"
+        })
+        .split(',').join('');
       currentCommentsBody.insertBefore(currentCommentNode, currentCommentsBody.lastElementChild.previousElementSibling.previousElementSibling);
     }
   };
@@ -602,26 +613,40 @@ function addMask() {
 //websocket
 
 function openWS(id) {
-  if (ws) {
-    //закрыть старое соединение перед повторным открытием
-    ws.close();
-  }
-
   ws = new WebSocket(`wss://neto-api.herokuapp.com/pic/${id}`);
   ws.addEventListener('message', evt => {
     const data = JSON.parse(evt.data);
     if (data.event === 'mask') {
-      console.log(data);
+      mask.src = data.url;
+
+      //после загрузки маски можно удалить штрихи, которые мы храним в state приложения и очистить холст
+      mask.addEventListener('load', e => {
+        if (!drawing) {
+          touches.length = 0; //если текущий пользователь не рисует, полностью очищаем штрихи, т.к. актуальный рисунок уже на сервере
+          return;
+        }
+        //если рисование продолжается, очищаем все штрихи, кроме последнего ??
+        touches = touches.slice(touches.length - 1);
+      });
     }
 
     if (data.event === 'comment') {
       const comment = data.comment;
       const id = data.comment.id;
-      applyComments({[id]: comment});
+      applyComments({
+        [id]: comment
+      });
     }
 
     if (data.event === 'error') {
       showErr(data.message);
+    }
+  });
+
+  ws.addEventListener('close', e => {
+    if (e.code !== 1000) {
+      //переоткрываем соединение в случае обрыва связи
+      openWS(imgId);
     }
   });
 }
