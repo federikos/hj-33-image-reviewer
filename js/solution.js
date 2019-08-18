@@ -397,7 +397,7 @@ app.addEventListener('click', e => {
   });
 
   const newComment = commentsForm.cloneNode(true);
-  newComment.style.zIndex = 3; //добавляем поверх канваса, чтобы нормально обрабатывались клики по комментариям
+  newComment.style.zIndex = 4; //добавляем поверх канваса, чтобы нормально обрабатывались клики по комментариям
   [...newComment.querySelectorAll('.comment')].forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии-примеры
   app.appendChild(newComment);
   console.log(newComment);
@@ -451,7 +451,7 @@ function applyComments(comments) {
     //создаем форму, если точки для этого комментария еще нет
     if (!currentCommentsForm) {
       currentCommentsForm = commentsForm.cloneNode(true);
-      currentCommentsForm.style.zIndex = 3; //форма для комментария поверх канваса, чтобы отслеживать клики
+      currentCommentsForm.style.zIndex = 4; //форма для комментария поверх канваса, чтобы отслеживать клики
     
       [...currentCommentsForm.querySelectorAll('.comment')]
         .forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии
@@ -525,8 +525,17 @@ app.addEventListener('click', e => {
 app.addEventListener('change', e => {
   if(e.target.classList.contains('comments__marker-checkbox')) {
     if (e.target.checked) {
-      [...document.querySelectorAll('.comments__marker-checkbox')].forEach(input => input.checked = false);
+      [...document.querySelectorAll('.comments__marker-checkbox')].forEach(input => {
+        if (input.parentElement.querySelector('.comment')) {
+          input.checked = false;
+          input.parentElement.style.zIndex = 3;
+        } else {
+          //если в форме нет комментариев, удаляем из разметки
+          input.parentElement.remove();
+        }
+      });
       e.target.checked = true;
+      e.target.parentElement.style.zIndex = 4;
     }
   }
 });
