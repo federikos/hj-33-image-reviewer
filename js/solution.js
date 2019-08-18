@@ -25,6 +25,7 @@ let imgId = null;
 let mask = null;
 const imgIdFromUrl = new URLSearchParams(window.location.search).get('imgIdFromUrl'); //получаем из урла id для "поделиться"
 let state = sessionStorage.getItem('state') || 'initial';
+let ws = null;
 
 //внешний вид в зависимости от состояния
 menu.dataset.state = state;
@@ -59,12 +60,14 @@ mask = document.querySelector('.mask');
 //добавление данных изображения из id адресной строки
 if (imgIdFromUrl) {
   getImageInfo(imgIdFromUrl)
-  .catch(error => console.error('Ошибка:', error))
+  .catch(error => showErr(error))
   .then(res => {
+    console.log(res);
      applyImg(res);
      mask.src = res.mask || '';
-     applyComments(res);
+     applyComments(res.comments);
      switchMenuMode(menuModeComments);
+     openWS(res.id);
   });
 }
 
@@ -98,7 +101,7 @@ function smoothCurve(points, color) {
 
   for(let i = 1; i < points.length - 1; i++) {
     ctx.lineTo(...points[i]);
-    // smoothCurveBetween(points[i], points[i + 1]);
+    // smoothCurveBetween(points[i], points[i + 1]); //можно сделать линию более плавной с помощью доп. функции вместо lineTo
   }
 
   ctx.stroke();
@@ -231,9 +234,10 @@ function handleFileChange(e) {
    .catch(error => console.error('Ошибка:', error))
    .then(res => {
       applyImg(res);
-      applyComments(res);
+      applyComments(res.comments);
       switchMenuMode(menuModeShare);
       history.pushState({}, null, createShareUrl(res.id)); //дописываем id в параметр url без перезагрузки страницы для удобного шаринга
+      openWS(res.id);
    });
 }
 
@@ -272,6 +276,18 @@ function publicNewComment(id, message, left, top) {
     '&left=' + encodeURIComponent(left) + 
     '&top=' + encodeURIComponent(top);
 
+  //отправить через websocket
+  ws.send(JSON.stringify({
+    "event": "comment",
+    "comment": {
+      "left": left,
+      "message": message,
+      "timestamp": Date.now(),
+      "top": top
+    }
+  }));
+  
+  //отправить через fetch
   return fetch(`https://neto-api.herokuapp.com/pic/${id}/comments`, {
     method: 'POST',
     headers: {
@@ -396,59 +412,62 @@ app.addEventListener('click', e => {
   marker.nextSibling.setAttribute('disabled', ''); //отключить скрытие формы по клику на маркер
 })
 
-//добавление полученных с сервера комментариев в UI
-function applyComments(res) {
+//добавление комментариев в UI
+function applyComments(comments) {
   
-  const sortedComments = [
-    // {top, left, comments: []},
-  ];
+  for(const commentKey in comments) {
+    //пропустить, если такой комментарий существует
+    if (document.querySelector(`[data-id = '${commentKey}']`)) {
+      continue;
+    };
 
-  for(const commentKey in res.comments) {
-    const comment = res.comments[commentKey];
-    let isPositionFound = false;
-    sortedComments.forEach(group => {
-      if (group.top === comment.top
-        && group.left === comment.left) {
-          group.comments.push(comment);
-          isPositionFound = true;
+    const comment = comments[commentKey];
+
+    //создаем отдельный коммент
+    const currentCommentNode = commentNode.cloneNode(true);
+    currentCommentNode.lastElementChild.innerText = comment.message;
+    currentCommentNode.dataset.id = commentKey;
+    currentCommentNode.firstElementChild.innerText = new Date(comment.timestamp)
+        .toLocaleString("ru", {
+          year: "2-digit",
+          month: "numeric",
+          day: "numeric",
+          hour: "numeric",
+          minute: "numeric",
+          second: "numeric"
+        })
+        .split(',').join('');
+    
+    //Форма с комментариями
+    let currentCommentsForm = null;
+
+    [...document.querySelectorAll('.comments__form')].forEach(group => {
+      if (parseInt(group.style.top) === comment.top
+        && parseInt(group.style.left) === comment.left) {
+          currentCommentsForm = group;
         }
     });
 
-    if (!isPositionFound) {
-      sortedComments.push({top: comment.top, left: comment.left, comments: [comment]});
-    }
-  };
-
-  for (const commentsGroup of sortedComments) {
-    const currentCommentsForm = commentsForm.cloneNode(true);
-    currentCommentsForm.style.zIndex = 3; //форма для комментария поверх канваса, чтобы отслеживать клики
-    const currentCommentsBody = currentCommentsForm.querySelector('.comments__body');
-    // currentCommentsBody.removeChild(currentLoader);
-  
-    [...currentCommentsForm.querySelectorAll('.comment')]
-      .forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии
+    //создаем форму, если точки для этого комментария еще нет
+    if (!currentCommentsForm) {
+      currentCommentsForm = commentsForm.cloneNode(true);
+      currentCommentsForm.style.zIndex = 3; //форма для комментария поверх канваса, чтобы отслеживать клики
     
-    for (const comment of commentsGroup.comments) { //этот код частично повторяется в функции updateCommentForm, нужно вынести в отдельную функцию
-      const currentCommentNode = commentNode.cloneNode(true);
-      currentCommentNode.lastElementChild.innerText = comment.message;
-      currentCommentNode.firstElementChild.innerText = new Date(comment.timestamp)
-          .toLocaleString("ru", {
-            year: "2-digit",
-            month: "numeric",
-            day: "numeric",
-            hour: "numeric",
-            minute: "numeric",
-            second: "numeric"
-          })
-          .split(',').join('');
-      currentCommentsBody.insertBefore(currentCommentNode, currentCommentsBody.lastElementChild.previousElementSibling.previousElementSibling);
+      [...currentCommentsForm.querySelectorAll('.comment')]
+        .forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии
+
+
+      app.appendChild(currentCommentsForm);
+      currentCommentsForm.style.display = 'block';
+      currentCommentsForm.style.left = `${comment.left}px`;
+      currentCommentsForm.style.top = `${comment.top}px`;
     }
-    app.appendChild(currentCommentsForm);
-    currentCommentsForm.style.display = 'block';
-    currentCommentsForm.style.left = `${commentsGroup.left}px`;
-    currentCommentsForm.style.top = `${commentsGroup.top}px`;
-  }
-}
+
+    //добавляем комментарий в форму
+    const currentCommentsBody = currentCommentsForm.querySelector('.comments__body');
+    currentCommentsBody.insertBefore(currentCommentNode, currentCommentsBody.lastElementChild.previousElementSibling.previousElementSibling);
+  };
+};
 
 //Скрыть-показать комментарии
 [...document.querySelectorAll('.menu__toggle')].forEach(toggle => {
@@ -512,6 +531,7 @@ app.addEventListener('change', e => {
   }
 });
 
+//нужно немного доработать функцию applyComments и удалить эту!
 function updateCommentForm(res, currentCommentForm, currentLoader, left, top) {
   const currentCommentsBody = currentCommentForm.querySelector('.comments__body');
   currentCommentsBody.removeChild(currentLoader);
@@ -568,4 +588,31 @@ function addMask() {
   mask.style.zIndex = 1;
 
   app.insertBefore(mask, currentImage);
+}
+
+//websocket
+
+function openWS(id) {
+  if (ws) {
+    //закрыть старое соединение перед повторным открытием
+    ws.close();
+  }
+
+  ws = new WebSocket(`wss://neto-api.herokuapp.com/pic/${id}`);
+  ws.addEventListener('message', evt => {
+    const data = JSON.parse(evt.data);
+    if (data.event === 'mask') {
+      console.log(data);
+    }
+
+    if (data.event === 'comment') {
+      const comment = data.comment;
+      const id = data.comment.id;
+      applyComments({[id]: comment});
+    }
+
+    if (data.event === 'error') {
+      showErr(data.message);
+    }
+  });
 }
