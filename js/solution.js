@@ -143,6 +143,8 @@ function repaint() {
     });
 }
 
+const currentImageBounds = currentImage.getBoundingClientRect();
+
 canvas.addEventListener('mousedown', e => {
   if (menuModeDraw.dataset.state === 'selected') {
     drawing = true;
@@ -151,6 +153,7 @@ canvas.addEventListener('mousedown', e => {
       points: []
     };
     touch.points.push([e.offsetX, e.offsetY]);
+    console.log(e.offsetX, currentImageBounds.left, e.offsetY, currentImageBounds.top);
     touches.push(touch);
     needsRepaint = true;
   }
@@ -591,8 +594,11 @@ function addCanvas() {
   canvas.setAttribute('width', app.clientWidth);
   canvas.setAttribute('height', app.clientHeight);
   canvas.id = 'canvas';
-  canvas.style.position = 'relative';
+  canvas.style.position = 'absolute';
   canvas.style.zIndex = 2;
+  canvas.style.top = '50%';
+  canvas.style.left = '50%';
+  canvas.style.transform = 'translate(-50%, -50%)';
 
   app.insertBefore(canvas, currentImage);
 }
@@ -612,6 +618,12 @@ function addMask() {
 
   app.insertBefore(mask, currentImage);
 }
+
+//в момент загрузки изображения устанавливаем размер маски и canvas
+currentImage.addEventListener('load', e => {
+  mask.width = canvas.width = currentImage.width;
+  mask.height = canvas.height = currentImage.height;
+})
 
 //websocket
 
