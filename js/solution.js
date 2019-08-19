@@ -19,11 +19,10 @@ const menuUrl = document.querySelector('.menu__url');
 const menuCopy = document.querySelector('.menu_copy');
 const drawToolsList = document.querySelector('.draw-tools');
 
-//state приложения
+//state
 let fileInput = null; //инпут для изображения
-let imgId = null;
+let imgId = new URLSearchParams(window.location.search).get('imgIdFromUrl') || null; //получаем из урла id для "поделиться"
 let mask = null;
-const imgIdFromUrl = new URLSearchParams(window.location.search).get('imgIdFromUrl'); //получаем из урла id для "поделиться"
 let state = sessionStorage.getItem('state') || 'initial';
 let ws = null;
 let timer = performance.now();
@@ -59,11 +58,10 @@ addMask();
 mask = document.querySelector('.mask');
 
 //добавление данных изображения из id адресной строки
-if (imgIdFromUrl) {
-  getImageInfo(imgIdFromUrl)
+if (imgId) {
+  getImageInfo(imgId)
     .catch(error => showErr(error))
     .then(res => {
-      console.log(res);
       applyImg(res);
       mask.src = res.mask || '';
       applyComments(res.comments);
@@ -111,6 +109,7 @@ function smoothCurve(points, color) {
 function getColor() {
   const colorName = drawToolsList.querySelector('input[type = radio]:checked').value;
   let color;
+  
   switch (colorName) {
     case 'red':
       color = '#ea5d56';
@@ -128,6 +127,7 @@ function getColor() {
       color = '#b36ade';
       break;
   }
+
   return color;
 }
 
@@ -160,7 +160,6 @@ canvas.addEventListener('mouseup', e => {
   if (menuModeDraw.dataset.state === 'selected') {
     drawing = false;
     needsRepaint = true;
-    console.log(touches);
 
     //отправка на сервер
     const now = performance.now();
@@ -193,8 +192,6 @@ function tick() {
 }
 
 tick();
-
-
 
 
 //функции
@@ -244,6 +241,13 @@ function handleFileChange(e) {
   publicNewImage(img)
     .catch(error => console.error('Ошибка:', error))
     .then(res => {
+      mask.src = ''; //очищаем маску
+
+      //удаляем все комментарии из разметки
+      [...document.querySelectorAll('.comments__form')].forEach(commentForm => {
+        commentForm.remove();
+      });
+
       applyImg(res);
       applyComments(res.comments);
       switchMenuMode(menuModeShare);
@@ -411,7 +415,6 @@ app.addEventListener('click', e => {
   newComment.style.zIndex = 4; //добавляем поверх канваса, чтобы нормально обрабатывались клики по комментариям
   [...newComment.querySelectorAll('.comment')].forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии-примеры
   app.appendChild(newComment);
-  console.log(newComment);
   newComment.style.display = 'block';
   const marker = newComment.firstElementChild;
   const markerLeft = e.clientX - marker.offsetWidth / 2;
@@ -623,6 +626,7 @@ function openWS(id) {
       mask.addEventListener('load', e => {
         if (!drawing) {
           touches.length = 0; //если текущий пользователь не рисует, полностью очищаем штрихи, т.к. актуальный рисунок уже на сервере
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
           return;
         }
         //если рисование продолжается, очищаем все штрихи, кроме последнего ??
