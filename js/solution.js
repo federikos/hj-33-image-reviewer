@@ -63,7 +63,10 @@ if (imgId) {
     .catch(error => showErr(error))
     .then(res => {
       applyImg(res);
-      mask.src = res.mask || '';
+      if (res.mask) {
+        mask.src = res.mask;
+        mask.style.display = 'block';
+      }
       applyComments(res.comments);
       switchMenuMode(menuModeComments);
       openWS(res.id);
@@ -244,7 +247,7 @@ function handleFileChange(e) {
   publicNewImage(img)
     .catch(error => console.error('Ошибка:', error))
     .then(res => {
-      mask.src = ''; //очищаем маску
+      mask.style.display = 'none'; //прячем маску
 
       //удаляем все комментарии из разметки
       [...document.querySelectorAll('.comments__form')].forEach(commentForm => {
@@ -606,7 +609,7 @@ function addCanvas() {
 function addMask() {
   const mask = document.createElement('img');
   mask.classList.add('mask');
-  mask.style.display = 'block';
+  mask.style.display = 'none'; //по умолчанию прячем маску
 
   //центрируем маску
   mask.style.top = '50%';
@@ -633,7 +636,8 @@ function openWS(id) {
     const data = JSON.parse(evt.data);
     if (data.event === 'mask') {
       mask.src = data.url;
-
+      mask.style.display = 'block';
+      
       //после загрузки маски можно удалить штрихи, которые мы храним в state приложения и очистить холст
       mask.addEventListener('load', e => {
         if (!drawing) {
