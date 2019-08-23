@@ -20,12 +20,14 @@ const menuCopy = document.querySelector('.menu_copy');
 const drawToolsList = document.querySelector('.draw-tools');
 
 //state
+let currentImageBounds = currentImage.getBoundingClientRect();
 let fileInput = null; //инпут для изображения
 let imgId = new URLSearchParams(window.location.search).get('imgIdFromUrl') || null; //получаем из урла id для "поделиться"
 let mask = null;
 let state = sessionStorage.getItem('state') || 'initial';
 let ws = null;
 let timer = performance.now();
+const MARKER_WIDTH_ADJUSTMENT = commentsForm.firstElementChild.offsetWidth / 2; //поправка на ширину маркера
 
 //внешний вид в зависимости от состояния
 menu.dataset.state = state;
@@ -67,7 +69,6 @@ if (imgId) {
         mask.src = res.mask;
         mask.style.display = 'block';
       }
-      applyComments(res.comments);
       switchMenuMode(menuModeComments);
       openWS(res.id);
     });
@@ -146,8 +147,6 @@ function repaint() {
     });
 }
 
-const currentImageBounds = currentImage.getBoundingClientRect();
-
 canvas.addEventListener('mousedown', e => {
   if (menuModeDraw.dataset.state === 'selected') {
     drawing = true;
@@ -156,7 +155,6 @@ canvas.addEventListener('mousedown', e => {
       points: []
     };
     touch.points.push([e.offsetX, e.offsetY]);
-    console.log(e.offsetX, currentImageBounds.left, e.offsetY, currentImageBounds.top);
     touches.push(touch);
     needsRepaint = true;
   }
@@ -255,7 +253,6 @@ function handleFileChange(e) {
       });
 
       applyImg(res);
-      applyComments(res.comments);
       switchMenuMode(menuModeShare);
       history.pushState({}, null, createShareUrl(res.id)); //дописываем id в параметр url без перезагрузки страницы для удобного шаринга
       openWS(res.id);
@@ -333,6 +330,14 @@ function applyImg(res) {
   //switch state
   app.dataset.state = 'default';
   sessionStorage.setItem('state', 'default');
+
+  //в момент загрузки изображения устанавливаем размер маски и canvas
+  currentImage.addEventListener('load', e => {
+    mask.width = canvas.width = currentImage.width;
+    mask.height = canvas.height = currentImage.height;
+    currentImageBounds = currentImage.getBoundingClientRect();
+    applyComments(res.comments); //только после полной загрузки изображения добавляем комментарии на страницу
+  });
 }
 
 function switchMenuMode(modeNode) {
@@ -423,8 +428,10 @@ app.addEventListener('click', e => {
   app.appendChild(newComment);
   newComment.style.display = 'block';
   const marker = newComment.firstElementChild;
-  const markerLeft = e.clientX - marker.offsetWidth / 2;
+  const markerLeft = e.clientX - MARKER_WIDTH_ADJUSTMENT;
   const markerTop = e.clientY;
+  newComment.dataset.left = markerLeft - Math.round(currentImageBounds.left);
+  newComment.dataset.top = markerTop - Math.round(currentImageBounds.top);
   newComment.style.left = `${markerLeft}px`;
   newComment.style.top = `${markerTop}px`;
 
@@ -462,8 +469,8 @@ function applyComments(comments) {
     let currentCommentsForm = null;
 
     [...document.querySelectorAll('.comments__form')].forEach(group => {
-      if (parseInt(group.style.top) === comment.top &&
-        parseInt(group.style.left) === comment.left) {
+      if (parseInt(group.style.top) - Math.round(currentImageBounds.top) === comment.top &&
+        parseInt(group.style.left) - Math.round(currentImageBounds.left) === comment.left) {
         currentCommentsForm = group;
       }
     });
@@ -479,8 +486,10 @@ function applyComments(comments) {
 
       app.appendChild(currentCommentsForm);
       currentCommentsForm.style.display = 'block';
-      currentCommentsForm.style.left = `${comment.left}px`;
-      currentCommentsForm.style.top = `${comment.top}px`;
+      currentCommentsForm.dataset.left = comment.left;
+      currentCommentsForm.dataset.top = comment.top;
+      currentCommentsForm.style.left = `${comment.left + Math.round(currentImageBounds.left)}px`;
+      currentCommentsForm.style.top = `${comment.top + Math.round(currentImageBounds.top)}px`;
     }
 
     //добавляем комментарий в форму
@@ -531,9 +540,11 @@ app.addEventListener('click', e => {
     const message = textInput.value;
     textInput.value = ''; //обнуляем инпут комментария
     const bounds = currentComment.getBoundingClientRect();
+    const left = bounds.left - Math.round(currentImageBounds.left);
+    const top = bounds.top - Math.round(currentImageBounds.top);
     const currentLoader = currentComment.querySelector('.comments__body').insertBefore(commentsLoader.cloneNode(true), textInput);
 
-    publicNewComment(imgId, message, bounds.left, bounds.top)
+    publicNewComment(imgId, message, left, top)
       .then(res => {
         updateCommentForm(res, currentComment, currentLoader, bounds.left, bounds.top);
         //здесь вызываем функцию "обновить форму комментария", в которой обновляем только комменты в этой точке
@@ -570,8 +581,8 @@ function updateCommentForm(res, currentCommentForm, currentLoader, left, top) {
 
   for (const commentKey in res.comments) {
     const comment = res.comments[commentKey];
-    if (left === comment.left &&
-      top === comment.top) {
+    if (left === comment.left + Math.round(currentImageBounds.left) &&
+      top === comment.top + Math.round(currentImageBounds.top)) {
       const currentCommentNode = commentNode.cloneNode(true);
       currentCommentNode.lastElementChild.innerText = comment.message;
       currentCommentNode.firstElementChild.innerText = new Date(comment.timestamp)
@@ -622,12 +633,6 @@ function addMask() {
   app.insertBefore(mask, currentImage);
 }
 
-//в момент загрузки изображения устанавливаем размер маски и canvas
-currentImage.addEventListener('load', e => {
-  mask.width = canvas.width = currentImage.width;
-  mask.height = canvas.height = currentImage.height;
-})
-
 //websocket
 
 function openWS(id) {
@@ -670,3 +675,32 @@ function openWS(id) {
     }
   });
 }
+
+// функция для переставления комментариев в правильное положения после ресайза страницы
+
+(function() {
+
+  window.addEventListener("resize", resizeThrottler, false);
+
+  var resizeTimeout;
+  function resizeThrottler() {
+    // ignore resize events as long as an actualResizeHandler execution is in the queue
+    if ( !resizeTimeout ) {
+      resizeTimeout = setTimeout(function() {
+        resizeTimeout = null;
+        actualResizeHandler();
+     
+       // The actualResizeHandler will execute at a rate of 15fps
+       }, 66);
+    }
+  }
+
+  function actualResizeHandler() {
+    [...document.getElementsByClassName('comments__form')].forEach(form => {
+      currentImageBounds = currentImage.getBoundingClientRect();
+      form.style.left = `${Math.round(currentImageBounds.left) + +form.dataset.left}px`;
+      form.style.top = `${Math.round(currentImageBounds.top) + +form.dataset.top}px`;
+    });
+  }
+
+}());
