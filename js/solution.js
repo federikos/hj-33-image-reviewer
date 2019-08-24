@@ -20,7 +20,6 @@ const menuCopy = document.querySelector('.menu_copy');
 const drawToolsList = document.querySelector('.draw-tools');
 
 //state
-let currentImageBounds = currentImage.getBoundingClientRect();
 let fileInput = null; //инпут для изображения
 let imgId = new URLSearchParams(window.location.search).get('imgIdFromUrl') || null; //получаем из урла id для "поделиться"
 let commonDataWrapper = null;
@@ -67,9 +66,8 @@ app.insertBefore(wrap, error);
 commonDataWrapper = document.querySelector('.commonDataWrapper');
 
 
-//маска
+//добавление маски в разметку
 addMask();
-mask = document.querySelector('.mask');
 
 //добавление данных изображения из id адресной строки
 if (imgId) {
@@ -77,10 +75,6 @@ if (imgId) {
     .catch(error => showErr(error))
     .then(res => {
       applyImg(res);
-      if (res.mask) {
-        mask.src = res.mask;
-        mask.style.display = 'block';
-      }
       switchMenuMode(menuModeComments);
       openWS(res.id);
     });
@@ -342,13 +336,18 @@ function applyImg(res) {
     commentForm.remove();
   });
 
+  //обновляем маску
+  if (res.mask) {
+    mask.src = res.mask;
+    mask.style.display = 'block';
+  }
+
   //в момент загрузки изображения устанавливаем размер маски и canvas
   currentImage.addEventListener('load', e => {
     commonDataWrapper.style.width = `${currentImage.width}px`;
     commonDataWrapper.style.height = `${currentImage.height}px`;  
     mask.width = canvas.width = currentImage.width;
     mask.height = canvas.height = currentImage.height;
-    currentImageBounds = currentImage.getBoundingClientRect();
     applyComments(res.comments); //только после полной загрузки изображения добавляем комментарии на страницу
   });
 }
@@ -441,6 +440,7 @@ app.addEventListener('click', e => {
   commonDataWrapper.appendChild(newComment);
   newComment.style.display = 'block';
   const marker = newComment.firstElementChild;
+  const currentImageBounds = currentImage.getBoundingClientRect();
   const markerLeft = e.clientX - Math.round(currentImageBounds.left) - MARKER_WIDTH_ADJUSTMENT;
   const markerTop = e.clientY - Math.round(currentImageBounds.top);
   newComment.dataset.left = markerLeft;
@@ -482,8 +482,8 @@ function applyComments(comments) {
     let currentCommentsForm = null;
 
     [...document.querySelectorAll('.comments__form')].forEach(group => {
-      if (group.dataset.top === comment.top &&
-        group.dataset.left === comment.left) {
+      if (parseInt(group.dataset.top) === comment.top &&
+        parseInt(group.dataset.left) === comment.left) {
         currentCommentsForm = group;
       }
     });
@@ -630,19 +630,20 @@ function addCanvas() {
 }
 
 function addMask() {
-  const mask = document.createElement('img');
-  mask.classList.add('mask');
-  mask.style.display = 'none'; //по умолчанию прячем маску
+  const maskTag = document.createElement('img');
+  maskTag.classList.add('mask');
+  maskTag.style.display = 'none'; //по умолчанию прячем маску
 
   //центрируем маску
-  mask.style.top = '50%';
-  mask.style.left = '50%';
-  mask.style.transform = 'translate(-50%, -50%)';
+  maskTag.style.top = '50%';
+  maskTag.style.left = '50%';
+  maskTag.style.transform = 'translate(-50%, -50%)';
 
-  mask.style.position = 'absolute';
-  mask.style.zIndex = 1;
+  maskTag.style.position = 'absolute';
+  maskTag.style.zIndex = 1;
 
-  commonDataWrapper.appendChild(mask);
+  commonDataWrapper.appendChild(maskTag);
+  mask = document.querySelector('.mask');
 }
 
 //websocket
