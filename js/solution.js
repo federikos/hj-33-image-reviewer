@@ -42,7 +42,6 @@ if (state === 'initial') {
 
 currentImage.src = sessionStorage.getItem('currentImgSrc') || '';
 
-
 //загрузка изображения
 fileInput = fileInput || document.createElement('input');
 fileInput.setAttribute('type', 'file');
@@ -64,7 +63,6 @@ wrap.style.left = '50%';
 wrap.style.transform = 'translate(-50%, -50%)';
 app.insertBefore(wrap, error);
 commonDataWrapper = document.querySelector('.commonDataWrapper');
-
 
 //добавление маски в разметку
 addMask();
@@ -110,35 +108,14 @@ function smoothCurve(points, color) {
 
   for (let i = 1; i < points.length - 1; i++) {
     ctx.lineTo(...points[i]);
-    // smoothCurveBetween(points[i], points[i + 1]); //можно сделать линию более плавной с помощью доп. функции вместо lineTo
   }
 
   ctx.stroke();
 }
 
 function getColor() {
-  const colorName = drawToolsList.querySelector('input[type = radio]:checked').value;
-  let color;
-  
-  switch (colorName) {
-    case 'red':
-      color = '#ea5d56';
-      break;
-    case 'yellow':
-      color = '#f3d135';
-      break;
-    case 'green':
-      color = '#6cbe47';
-      break;
-    case 'blue':
-      color = '#53a7f5';
-      break;
-    case 'purple':
-      color = '#b36ade';
-      break;
-  }
-
-  return color;
+  const coloredSpan = drawToolsList.querySelector('input[type = radio]:checked').nextSibling;
+  return getComputedStyle(coloredSpan).getPropertyValue("background-color");
 }
 
 function repaint() {
@@ -619,8 +596,6 @@ function updateCommentForm(res, currentCommentForm, currentLoader, left, top) {
 
 function addCanvas() {
   const canvas = document.createElement('canvas');
-  canvas.setAttribute('width', app.clientWidth);
-  canvas.setAttribute('height', app.clientHeight);
   canvas.id = 'canvas';
   canvas.style.position = 'absolute';
   canvas.style.zIndex = 2;
