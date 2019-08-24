@@ -192,6 +192,8 @@ canvas.addEventListener('mousemove', e => {
   }
 });
 
+canvas.addEventListener('mouseleave', e => drawing = false);
+
 function tick() {
   if (needsRepaint) {
     repaint();
@@ -655,7 +657,6 @@ function openWS(id) {
     if (data.event === 'mask') {
       mask.src = data.url;
       mask.style.display = 'block';
-      
       //после загрузки маски можно удалить штрихи, которые мы храним в state приложения и очистить холст
       mask.addEventListener('load', e => {
         if (!drawing) {
