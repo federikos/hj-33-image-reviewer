@@ -23,11 +23,12 @@ const drawToolsList = document.querySelector('.draw-tools');
 let currentImageBounds = currentImage.getBoundingClientRect();
 let fileInput = null; //инпут для изображения
 let imgId = new URLSearchParams(window.location.search).get('imgIdFromUrl') || null; //получаем из урла id для "поделиться"
+let commonDataWrapper = null;
 let mask = null;
 let state = sessionStorage.getItem('state') || 'initial';
 let ws = null;
 let timer = performance.now();
-const MARKER_WIDTH_ADJUSTMENT = commentsForm.firstElementChild.offsetWidth / 2; //поправка на ширину маркера
+const MARKER_WIDTH_ADJUSTMENT = 21; //поправка на 3/4 ширины маркера
 
 //внешний вид в зависимости от состояния
 menu.dataset.state = state;
@@ -54,6 +55,17 @@ app.addEventListener('drop', e => {
   e.preventDefault();
   handleFileChange(e);
 });
+
+//wrapper для маски, канваса и комментариев
+const wrap = document.createElement('div');
+wrap.classList.add('commonDataWrapper');
+wrap.style.position = 'absolute';
+wrap.style.top = '50%';
+wrap.style.left = '50%';
+wrap.style.transform = 'translate(-50%, -50%)';
+app.insertBefore(wrap, error);
+commonDataWrapper = document.querySelector('.commonDataWrapper');
+
 
 //маска
 addMask();
@@ -246,12 +258,6 @@ function handleFileChange(e) {
     .catch(error => console.error('Ошибка:', error))
     .then(res => {
       mask.style.display = 'none'; //прячем маску
-
-      //удаляем все комментарии из разметки
-      [...document.querySelectorAll('.comments__form')].forEach(commentForm => {
-        commentForm.remove();
-      });
-
       applyImg(res);
       switchMenuMode(menuModeShare);
       history.pushState({}, null, createShareUrl(res.id)); //дописываем id в параметр url без перезагрузки страницы для удобного шаринга
@@ -331,8 +337,15 @@ function applyImg(res) {
   app.dataset.state = 'default';
   sessionStorage.setItem('state', 'default');
 
+  //удаляем все комментарии из разметки
+  [...document.querySelectorAll('.comments__form')].forEach(commentForm => {
+    commentForm.remove();
+  });
+
   //в момент загрузки изображения устанавливаем размер маски и canvas
   currentImage.addEventListener('load', e => {
+    commonDataWrapper.style.width = `${currentImage.width}px`;
+    commonDataWrapper.style.height = `${currentImage.height}px`;  
     mask.width = canvas.width = currentImage.width;
     mask.height = canvas.height = currentImage.height;
     currentImageBounds = currentImage.getBoundingClientRect();
@@ -425,13 +438,13 @@ app.addEventListener('click', e => {
   const newComment = commentsForm.cloneNode(true);
   newComment.style.zIndex = 4; //добавляем поверх канваса, чтобы нормально обрабатывались клики по комментариям
   [...newComment.querySelectorAll('.comment')].forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии-примеры
-  app.appendChild(newComment);
+  commonDataWrapper.appendChild(newComment);
   newComment.style.display = 'block';
   const marker = newComment.firstElementChild;
-  const markerLeft = e.clientX - MARKER_WIDTH_ADJUSTMENT;
-  const markerTop = e.clientY;
-  newComment.dataset.left = markerLeft - Math.round(currentImageBounds.left);
-  newComment.dataset.top = markerTop - Math.round(currentImageBounds.top);
+  const markerLeft = e.clientX - Math.round(currentImageBounds.left) - MARKER_WIDTH_ADJUSTMENT;
+  const markerTop = e.clientY - Math.round(currentImageBounds.top);
+  newComment.dataset.left = markerLeft;
+  newComment.dataset.top = markerTop;
   newComment.style.left = `${markerLeft}px`;
   newComment.style.top = `${markerTop}px`;
 
@@ -469,8 +482,8 @@ function applyComments(comments) {
     let currentCommentsForm = null;
 
     [...document.querySelectorAll('.comments__form')].forEach(group => {
-      if (parseInt(group.style.top) - Math.round(currentImageBounds.top) === comment.top &&
-        parseInt(group.style.left) - Math.round(currentImageBounds.left) === comment.left) {
+      if (group.dataset.top === comment.top &&
+        group.dataset.left === comment.left) {
         currentCommentsForm = group;
       }
     });
@@ -484,12 +497,12 @@ function applyComments(comments) {
       .forEach(comment => comment.parentElement.removeChild(comment)); //удаляем все комментарии
 
 
-      app.appendChild(currentCommentsForm);
+      commonDataWrapper.appendChild(currentCommentsForm);
       currentCommentsForm.style.display = 'block';
       currentCommentsForm.dataset.left = comment.left;
       currentCommentsForm.dataset.top = comment.top;
-      currentCommentsForm.style.left = `${comment.left + Math.round(currentImageBounds.left)}px`;
-      currentCommentsForm.style.top = `${comment.top + Math.round(currentImageBounds.top)}px`;
+      currentCommentsForm.style.left = `${comment.left}px`;
+      currentCommentsForm.style.top = `${comment.top}px`;
     }
 
     //добавляем комментарий в форму
@@ -525,7 +538,7 @@ app.addEventListener('click', e => {
       currentComment.querySelector('.comments__marker-checkbox').checked = false; //выключаем чекбокс
     } else {
       const currentComment = e.target.parentElement.parentElement;
-      app.removeChild(currentComment); //иначе полностью удаляем комментарий из разметки
+      commonDataWrapper.removeChild(currentComment); //иначе полностью удаляем комментарий из разметки
     }
   }
 });
@@ -539,14 +552,13 @@ app.addEventListener('click', e => {
     currentComment.querySelector('.comments__marker-checkbox').removeAttribute('disabled'); //включить скрытие формы по клику на маркер
     const message = textInput.value;
     textInput.value = ''; //обнуляем инпут комментария
-    const bounds = currentComment.getBoundingClientRect();
-    const left = bounds.left - Math.round(currentImageBounds.left);
-    const top = bounds.top - Math.round(currentImageBounds.top);
+    const left = currentComment.dataset.left;
+    const top = currentComment.dataset.top;
     const currentLoader = currentComment.querySelector('.comments__body').insertBefore(commentsLoader.cloneNode(true), textInput);
 
     publicNewComment(imgId, message, left, top)
       .then(res => {
-        updateCommentForm(res, currentComment, currentLoader, bounds.left, bounds.top);
+        updateCommentForm(res, currentComment, currentLoader, left, top);
         //здесь вызываем функцию "обновить форму комментария", в которой обновляем только комменты в этой точке
       });
   }
@@ -581,8 +593,8 @@ function updateCommentForm(res, currentCommentForm, currentLoader, left, top) {
 
   for (const commentKey in res.comments) {
     const comment = res.comments[commentKey];
-    if (left === comment.left + Math.round(currentImageBounds.left) &&
-      top === comment.top + Math.round(currentImageBounds.top)) {
+    if (parseInt(left) === comment.left &&
+      parseInt(top) === comment.top) {
       const currentCommentNode = commentNode.cloneNode(true);
       currentCommentNode.lastElementChild.innerText = comment.message;
       currentCommentNode.firstElementChild.innerText = new Date(comment.timestamp)
@@ -614,7 +626,7 @@ function addCanvas() {
   canvas.style.left = '50%';
   canvas.style.transform = 'translate(-50%, -50%)';
 
-  app.insertBefore(canvas, currentImage);
+  commonDataWrapper.appendChild(canvas);
 }
 
 function addMask() {
@@ -630,7 +642,7 @@ function addMask() {
   mask.style.position = 'absolute';
   mask.style.zIndex = 1;
 
-  app.insertBefore(mask, currentImage);
+  commonDataWrapper.appendChild(mask);
 }
 
 //websocket
@@ -675,32 +687,3 @@ function openWS(id) {
     }
   });
 }
-
-// функция для переставления комментариев в правильное положения после ресайза страницы
-
-(function() {
-
-  window.addEventListener("resize", resizeThrottler, false);
-
-  var resizeTimeout;
-  function resizeThrottler() {
-    // ignore resize events as long as an actualResizeHandler execution is in the queue
-    if ( !resizeTimeout ) {
-      resizeTimeout = setTimeout(function() {
-        resizeTimeout = null;
-        actualResizeHandler();
-     
-       // The actualResizeHandler will execute at a rate of 15fps
-       }, 66);
-    }
-  }
-
-  function actualResizeHandler() {
-    [...document.getElementsByClassName('comments__form')].forEach(form => {
-      currentImageBounds = currentImage.getBoundingClientRect();
-      form.style.left = `${Math.round(currentImageBounds.left) + +form.dataset.left}px`;
-      form.style.top = `${Math.round(currentImageBounds.top) + +form.dataset.top}px`;
-    });
-  }
-
-}());
