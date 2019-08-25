@@ -97,7 +97,7 @@ function circle(point, color) {
   ctx.fill();
 }
 
-function smoothCurve(points, color) {
+function drawLine(points, color) {
   ctx.beginPath();
   ctx.strokeStyle = color;
   ctx.lineWidth = BRUSH_RADIUS;
@@ -121,12 +121,12 @@ function getColor() {
 function repaint() {
 
   touches
-    .forEach((touch) => {
+    .forEach(touch => {
       touch.points.forEach(point => {
         circle(point, touch.color);
       });
 
-      smoothCurve(touch.points, touch.color);
+      drawLine(touch.points, touch.color);
     });
 }
 
@@ -182,7 +182,6 @@ function tick() {
 
 tick();
 
-
 //функции
 
 function centerElement(el) {
@@ -201,6 +200,19 @@ function showErr(msg) {
   error.parentElement.insertBefore(currentErr, error);
   currentErr.style.display = 'block';
   currentErr.style.zIndex = 2;
+
+   //удалить сообщение об ошибке через 5 секунд
+  let opacity = 1;
+  
+  function smoothlyDelete() {
+    if (opacity < 0.01) {
+      currentErr.remove();
+      return;
+    }
+    currentErr.style.opacity = opacity = opacity - 0.01;
+    setTimeout(() => smoothlyDelete(), 50);
+  }
+  setTimeout(() => smoothlyDelete(), 5000);
 }
 
 function hideErrors() {
