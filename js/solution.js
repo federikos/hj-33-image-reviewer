@@ -159,13 +159,13 @@ canvas.addEventListener('mouseup', e => {
 });
 
 canvas.addEventListener('mousemove', e => {
-  if (menuModeDraw.dataset.state === 'selected') {
-    if (drawing) {
-      const point = [e.offsetX, e.offsetY];
-      touches[touches.length - 1].points.push(point);
-      needsRepaint = true;
-    }
+  if (menuModeDraw.dataset.state !== 'selected' || !drawing) {
+    return;
   }
+  
+  const point = [e.offsetX, e.offsetY];
+  touches[touches.length - 1].points.push(point);
+  needsRepaint = true;
 });
 
 canvas.addEventListener('mouseleave', e => drawing = false);
