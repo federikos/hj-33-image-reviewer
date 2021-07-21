@@ -1,7 +1,3 @@
----
-permalink: /index.html
----
-
 Дипломный проект курса «JavaScript в браузере»
 ===
 
